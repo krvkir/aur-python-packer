@@ -30,7 +30,7 @@ fi
 # PACKAGE LISTS
 # ==============================================================================
 
-# External AUR dependencies.
+# External AUR dependencies (Fixes "target not found" pacman errors)
 # Format: "package-name" OR "package-name:missing_dep1 missing_dep2"
 # If a package spec is broken and missing dependencies, list them after a colon.
 AUR_DEPENDENCIES=(
@@ -58,7 +58,8 @@ AUR_DEPENDENCIES=(
     # 'jupyter-lsp'
 
     # "python-opentelemetry-api"
-    # "python-fastmcp"
+    "python-fastmcp"
+    "python-jsonref"
     # "python-langchain"
 
     # "python-opentelemetry"
@@ -66,10 +67,10 @@ AUR_DEPENDENCIES=(
     # "python-broken-package:python-hatchling python-pytest"
 )
 
-# Topological order of local packages we are developing/maintaining
+# Topological order of local packages
 PACKAGES=(
-    "python-jupyterlab-eventlistener"
-    "python-jupyterlab-cell-input-footer"
+    "python-jupyterlab-eventlistener" # ok
+    "python-jupyterlab-cell-input-footer" # ok
     "python-jupyter-server-mcp"
     "python-jupyterlab-chat"
     "python-jupyter-ai-litellm"
@@ -82,7 +83,7 @@ PACKAGES=(
     "python-jupyter-ai-persona-manager"
     "python-jupyter-ai-chat-commands"
     "python-jupyter-ai-jupyternaut"
-    "python-jupyter-ai-magic-commands"
+    "python-jupyter-ai-magic-commands" # ok
     "python-jupyter-ai"
 )
 
@@ -90,6 +91,8 @@ PACKAGES=(
 # INJECTION SETUP
 # ==============================================================================
 CHROOT_INJECT_ARGS=()
+FAILED_PACKAGES=()
+SUCCESS_PACKAGES=()
 
 echo -e "\n\033[1;34m==> Scanning for existing pre-built packages to inject...\033[0m"
 shopt -s nullglob
@@ -100,6 +103,37 @@ for ext_pkg in *.pkg.tar.zst; do
     fi
 done
 shopt -u nullglob
+
+# Helper function to parse build logs
+parse_build_log() {
+    local logfile="build.log"
+    echo -e "\n\033[1;31m    [!] Build failed! Diagnosing missing dependencies...\033[0m"
+    
+    # 1. Check for Pacman missing dependencies (AUR packages needed)
+    local pacman_missing
+    pacman_missing=$(awk '/==> Missing dependencies:/{flag=1; next} /^==>/{flag=0} flag && /^  ->/ {print $2}' "$logfile")
+    
+    if [ -n "$pacman_missing" ]; then
+        echo -e "\033[1;33m    Add these to AUR_DEPENDENCIES in this script (they are missing from the chroot):\033[0m"
+        while read -r dep; do
+            echo "      \"$dep\""
+        done <<< "$pacman_missing"
+    fi
+
+    # 2. Check for Python PEP-517 missing dependencies (Missing from PKGBUILD)
+    local python_missing
+    python_missing=$(awk '/ERROR Missing dependencies:/{flag=1; next} /^==> ERROR:/{flag=0} flag && /^[[:space:]]/ {print $1}' "$logfile")
+    
+    if [ -n "$python_missing" ]; then
+        echo -e "\033[1;33m    Add these to 'makedepends' (and likely 'depends') in your PKGBUILD:\033[0m"
+        while read -r dep; do
+            # Strip constraint versions (<, >, =, ~) for cleaner copy-pasting
+            clean_dep=$(echo "$dep" | sed -E 's/[<>=~].*//')
+            echo "      '$clean_dep'    (Raw constraint: $dep)"
+        done <<< "$python_missing"
+    fi
+    echo ""
+}
 
 # ==============================================================================
 # PHASE 0: BUILD AUR DEPENDENCIES
@@ -129,21 +163,20 @@ for entry in "${AUR_DEPENDENCIES[@]}"; do
     if [ -n "$missing_deps" ]; then
         echo -e "\033[1;35m -> Patching PKGBUILD for $dep with missing dependencies: $missing_deps\033[0m"
         formatted_deps=""
-        for md in $missing_deps; do
-            formatted_deps="$formatted_deps '$md'"
-        done
-        
-        # Append to the end of the PKGBUILD
-        echo "" >> PKGBUILD
-        echo "# --- Injected by push-to-aur.sh ---" >> PKGBUILD
-        echo "makedepends+=($formatted_deps)" >> PKGBUILD
-        echo "depends+=($formatted_deps)" >> PKGBUILD
+        for md in $missing_deps; do formatted_deps="$formatted_deps '$md'"; done
+        echo -e "\n# --- Injected by push-to-aur.sh ---\nmakedepends+=($formatted_deps)\ndepends+=($formatted_deps)" >> PKGBUILD
     fi
 
-    echo " -> Running ${BUILD_CMD[*]}..."
-    if ! "${BUILD_CMD[@]}" "${CHROOT_INJECT_ARGS[@]}"; then
-        echo -e "\033[1;31mBuild failed for AUR dependency $dep.\033[0m"
-        exit 1
+    set +e
+    "${BUILD_CMD[@]}" "${CHROOT_INJECT_ARGS[@]}" 2>&1 | tee build.log
+    BUILD_STATUS=${PIPESTATUS[0]}
+    set -e
+
+    if [ $BUILD_STATUS -ne 0 ]; then
+        parse_build_log
+        FAILED_PACKAGES+=("$dep (AUR Dependency)")
+        cd ..
+        continue
     fi
 
     shopt -s nullglob
@@ -168,24 +201,28 @@ for pkg in "${PACKAGES[@]}"; do
         echo -e "\n\033[1;36m -> Testing $pkg in clean chroot\033[0m"
         cd "$pkg"
 
-        echo " -> Running namcap on PKGBUILD..."
         namcap PKGBUILD || true
 
-        echo " -> Running ${BUILD_CMD[*]}..."
-        if ! "${BUILD_CMD[@]}" "${CHROOT_INJECT_ARGS[@]}"; then
-            echo -e "\033[1;31mBuild failed for $pkg in a clean chroot.\033[0m"
-            exit 1
+        set +e
+        "${BUILD_CMD[@]}" "${CHROOT_INJECT_ARGS[@]}" 2>&1 | tee build.log
+        BUILD_STATUS=${PIPESTATUS[0]}
+        set -e
+
+        if [ $BUILD_STATUS -ne 0 ]; then
+            parse_build_log
+            FAILED_PACKAGES+=("$pkg")
+            cd ..
+            continue
         fi
+
+        SUCCESS_PACKAGES+=("$pkg")
 
         shopt -s nullglob
         built_pkgs=(*.pkg.tar.zst)
         shopt -u nullglob
 
         for pkg_file in "${built_pkgs[@]}"; do
-            echo " -> Running namcap on built package $pkg_file..."
             namcap "$pkg_file" || true
-
-            # Add the newly built package to our injection array for the next packages in the loop
             CHROOT_INJECT_ARGS+=("$INJECT_FLAG" "$PWD/$pkg_file")
         done
 
@@ -193,28 +230,22 @@ for pkg in "${PACKAGES[@]}"; do
     fi
 done
 
-echo -e "\n\033[1;32m==> All packages built successfully in a clean environment and passed namcap!\033[0m"
-
 # ==============================================================================
-# PHASE 2: PUSH TO AUR
+# SUMMARY REPORT
 # ==============================================================================
-echo -e "\n\033[1;34m==> Phase 2: Pushing to AUR...\033[0m"
+echo -e "\n\033[1;34m========================================\033[0m"
+echo -e "\033[1;34m           BUILD SUMMARY                \033[0m"
+echo -e "\033[1;34m========================================\033[0m"
 
-for pkgdir in python-*/; do
-    if [ -d "$pkgdir/.git" ]; then
-        pkgname=$(basename "$pkgdir")
-        echo " -> Preparing to push $pkgname to AUR..."
-        cd "$pkgdir"
+if [ ${#SUCCESS_PACKAGES[@]} -gt 0 ]; then
+    echo -e "\033[1;32mSuccessful Packages:\033[0m"
+    for sp in "${SUCCESS_PACKAGES[@]}"; do echo "  - $sp"; done
+fi
 
-        if ! git remote get-url aur &>/dev/null; then
-            git remote add aur "ssh://aur@aur.archlinux.org/${pkgname}.git"
-        fi
-
-        echo "Ready to push $pkgname."
-        # git push -u aur master
-
-        cd ..
-    fi
-done
-
-echo -e "\n\033[1;32m==> Review and testing complete.\033[0m"
+if [ ${#FAILED_PACKAGES[@]} -gt 0 ]; then
+    echo -e "\n\033[1;31mFailed Packages (Check logs above for missing deps):\033[0m"
+    for fp in "${FAILED_PACKAGES[@]}"; do echo "  - $fp"; done
+    echo -e "\n\033[1;33mPlease fix the failed packages and run the script again.\033[0m"
+else
+    echo -e "\n\033[1;32mAll packages built successfully!\033[0m"
+fi
