@@ -30,15 +30,40 @@ fi
 # PACKAGE LISTS
 # ==============================================================================
 
-# External AUR dependencies that are required to build your packages.
+# External AUR dependencies.
+# Format: "package-name" OR "package-name:missing_dep1 missing_dep2"
+# If a package spec is broken and missing dependencies, list them after a colon.
 AUR_DEPENDENCIES=(
     "python-backoff"
     "python-opencensus"
-    "python-hatchling"
-    "python-rfc3987-syntax"
+    "python-tinycss2-1.4:python-flit-core"
+    # "python-hatchling-git"
+    # "python-rfc3987-syntax"
+
+    # 'python-hatch-jupyter-builder'
+    # 'python-hatch-nodejs-version'
+    # # 'npm'
+    # # 'jupyterlab'
+    # 'python-terminado'
+    # 'python-tinycss2'
+    # 'python-rfc3986-validator'
+    # 'python-rfc3987-syntax'
+    # 'python-isoduration'
+    # 'python-uri-template'
+    # 'python-rfc3339-validator'
+    # 'python-tzdata'
+    # 'python-fqdn'
+    # 'python-jsonpointer'
+    # 'python-webcolors'
+    # 'jupyter-lsp'
+
     # "python-opentelemetry-api"
     # "python-fastmcp"
     # "python-langchain"
+
+    # "python-opentelemetry"
+    # Example of patching a broken AUR spec:
+    # "python-broken-package:python-hatchling python-pytest"
 )
 
 # Topological order of local packages we are developing/maintaining
@@ -80,7 +105,10 @@ shopt -u nullglob
 # PHASE 0: BUILD AUR DEPENDENCIES
 # ==============================================================================
 echo -e "\n\033[1;34m==> Phase 0: Resolving external AUR dependencies...\033[0m"
-for dep in "${AUR_DEPENDENCIES[@]}"; do
+for entry in "${AUR_DEPENDENCIES[@]}"; do
+    # Parse entry for optional missing dependencies (format: pkgname:dep1 dep2)
+    IFS=':' read -r dep missing_deps <<< "$entry"
+
     shopt -s nullglob
     existing_pkgs=("${dep}"-*.pkg.tar.zst)
     shopt -u nullglob
@@ -96,6 +124,22 @@ for dep in "${AUR_DEPENDENCIES[@]}"; do
     fi
 
     cd "$dep"
+
+    # Dynamically patch the PKGBUILD if missing dependencies were specified
+    if [ -n "$missing_deps" ]; then
+        echo -e "\033[1;35m -> Patching PKGBUILD for $dep with missing dependencies: $missing_deps\033[0m"
+        formatted_deps=""
+        for md in $missing_deps; do
+            formatted_deps="$formatted_deps '$md'"
+        done
+        
+        # Append to the end of the PKGBUILD
+        echo "" >> PKGBUILD
+        echo "# --- Injected by push-to-aur.sh ---" >> PKGBUILD
+        echo "makedepends+=($formatted_deps)" >> PKGBUILD
+        echo "depends+=($formatted_deps)" >> PKGBUILD
+    fi
+
     echo " -> Running ${BUILD_CMD[*]}..."
     if ! "${BUILD_CMD[@]}" "${CHROOT_INJECT_ARGS[@]}"; then
         echo -e "\033[1;31mBuild failed for AUR dependency $dep.\033[0m"
@@ -156,21 +200,21 @@ echo -e "\n\033[1;32m==> All packages built successfully in a clean environment 
 # ==============================================================================
 echo -e "\n\033[1;34m==> Phase 2: Pushing to AUR...\033[0m"
 
-# for pkgdir in python-*/; do
-#     if [ -d "$pkgdir/.git" ]; then
-#         pkgname=$(basename "$pkgdir")
-#         echo " -> Preparing to push $pkgname to AUR..."
-#         cd "$pkgdir"
+for pkgdir in python-*/; do
+    if [ -d "$pkgdir/.git" ]; then
+        pkgname=$(basename "$pkgdir")
+        echo " -> Preparing to push $pkgname to AUR..."
+        cd "$pkgdir"
 
-#         if ! git remote get-url aur &>/dev/null; then
-#             git remote add aur "ssh://aur@aur.archlinux.org/${pkgname}.git"
-#         fi
+        if ! git remote get-url aur &>/dev/null; then
+            git remote add aur "ssh://aur@aur.archlinux.org/${pkgname}.git"
+        fi
 
-#         echo "Ready to push $pkgname."
-#         # git push -u aur master
+        echo "Ready to push $pkgname."
+        # git push -u aur master
 
-#         cd ..
-#     fi
-# done
+        cd ..
+    fi
+done
 
 echo -e "\n\033[1;32m==> Review and testing complete.\033[0m"
