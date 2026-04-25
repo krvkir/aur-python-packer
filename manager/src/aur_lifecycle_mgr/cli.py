@@ -15,10 +15,11 @@ def main(ctx, state, repo, path):
 
 @main.command()
 @click.argument('pkgname')
+@click.option('--nocheck', is_flag=True, help="Skip package checks (tests)")
 @click.pass_obj
-def build(mgr, pkgname):
+def build(mgr, pkgname, nocheck):
     """Build a package and its dependencies."""
-    mgr.build_all(pkgname)
+    mgr.build_all(pkgname, nocheck=nocheck)
 
 @main.command()
 @click.pass_obj

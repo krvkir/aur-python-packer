@@ -1,5 +1,5 @@
 import os
-from aur_lifecycle_mgr.resolver import DependencyResolver
+from aur_lifecycle_mgr.resolver import DependencyResolver, clone_aur_repo
 from aur_lifecycle_mgr.builder import BuildOrchestrator
 from aur_lifecycle_mgr.repo import RepoManager
 from aur_lifecycle_mgr.state import StateManager
@@ -13,7 +13,7 @@ class Manager:
         self.resolver = DependencyResolver()
         self.generator = PyPIGenerator()
 
-    def build_all(self, target_pkg):
+    def build_all(self, target_pkg, nocheck=False):
         print(f"Resolving dependencies for {target_pkg}...")
         self.resolver.resolve(target_pkg)
         order = self.resolver.get_build_order()
@@ -39,9 +39,11 @@ class Manager:
             if tier == 'local':
                 pkg_dir = node_data['path']
             elif tier == 'aur':
-                # TODO: Implement AUR git clone
-                print(f"AUR clone not yet implemented for {pkg}")
-                continue
+                pkg_dir = clone_aur_repo(pkg, "aur_cache")
+                if not pkg_dir:
+                    print(f"Failed to clone AUR repo for {pkg}")
+                    self.state.update_package(pkg, "failed", "clone_error")
+                    break
             elif tier == 'pypi':
                 pyname = pkg.replace('python-', '')
                 pkg_dir = os.path.join("generated", pkg)
@@ -50,10 +52,11 @@ class Manager:
             
             if pkg_dir:
                 try:
-                    pkg_file = self.builder.build(pkg, pkg_dir)
+                    # Generate custom pacman.conf for host-side builds to find local deps
+                    custom_conf = self.repo.generate_custom_conf(output_path=os.path.join("work", "pacman.conf"))
+                    
+                    pkg_file = self.builder.build(pkg, pkg_dir, nocheck=nocheck, custom_conf=custom_conf)
                     self.repo.add_package(pkg_file)
-                    # We need a version here. For local/pypi we can parse it.
-                    # Simplified for now.
                     self.state.update_package(pkg, "built", "success")
                     print(f"Successfully built and added {pkg}")
                 except Exception as e:

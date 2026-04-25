@@ -143,3 +143,16 @@ def get_aur_info(pkgname):
     except Exception:
         pass
     return None
+def clone_aur_repo(pkgname, dest_parent):
+    """Clone an AUR repository."""
+    url = f"https://aur.archlinux.org/{pkgname}.git"
+    dest_path = os.path.join(dest_parent, pkgname)
+    if os.path.exists(dest_path):
+        # Already exists, maybe update? For now just return path
+        return dest_path
+    
+    try:
+        subprocess.run(['git', 'clone', url, dest_path], check=True, capture_output=True)
+        return dest_path
+    except subprocess.CalledProcessError:
+        return None

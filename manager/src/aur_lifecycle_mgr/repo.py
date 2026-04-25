@@ -28,10 +28,16 @@ SigLevel = Optional TrustAll
 Server = file://{self.repo_dir}
 """
 
-    def inject_into_conf(self, conf_path):
-        with open(conf_path, 'r') as f:
-            content = f.read()
+    def generate_custom_conf(self, base_conf="/etc/pacman.conf", output_path="pacman.conf"):
+        with open(base_conf, 'r') as f:
+            lines = f.readlines()
         
-        if f"[{self.db_name}]" not in content:
-            with open(conf_path, 'a') as f:
-                f.write(self.get_pacman_conf_fragment())
+        # We need to find where [options] section is to add our repo?
+        # Actually, adding it at the end is fine, but we should make sure
+        # our repo has higher priority if needed.
+        
+        with open(output_path, 'w') as f:
+            for line in lines:
+                f.write(line)
+            f.write(self.get_pacman_conf_fragment())
+        return os.path.abspath(output_path)
