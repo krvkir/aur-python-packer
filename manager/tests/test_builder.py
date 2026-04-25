@@ -17,6 +17,7 @@ def test_build_arch(mock_glob, mock_run):
     orch.os_type = "arch"
     orch.build("test-pkg", "path/to/pkg")
     
-    mock_run.assert_called_once()
-    args = mock_run.call_args[0][0]
+    assert mock_run.call_count == 2
+    # Check that the second call was the actual build command
+    args = mock_run.call_args_list[1][0][0]
     assert "extra-x86_64-build" in args
