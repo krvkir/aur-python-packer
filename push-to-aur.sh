@@ -1,6 +1,14 @@
 #!/bin/bash
 set -e
 
+VERBOSE=0
+for arg in "$@"; do
+    if [ "$arg" == "--verbose" ]; then
+        VERBOSE=1
+        echo -e "\n\033[1;36m==> Verbose mode enabled\033[0m"
+    fi
+done
+
 # Detect toolchain (Arch devtools vs Manjaro chrootbuild)
 echo -e "\n\033[1;34m==> Initializing Build Environment...\033[0m"
 if command -v extra-x86_64-build &> /dev/null; then
@@ -58,8 +66,51 @@ AUR_DEPENDENCIES=(
     # 'jupyter-lsp'
 
     # "python-opentelemetry-api"
+    ### for server-mcp:
     "python-fastmcp"
+      "uvicorn"
+      "python-dotenv"
+      "python-pydantic-settings"
+      "python-pydantic"
+      "python-authlib"
+      "python-cryptography"
+      "python-rich"
+      "python-openai"
+      "python-httpx"
+      "python-pydantic-core"
+      "python-starlette"
+      "python-typing_extensions"
+      "python-anyio"
+      "python-pyperclip"
+      "python-exceptiongroup"
+      "python-openapi-pydantic"
+      "python-mcp"
+      "python-jsonschema-path"
+      "python-uncalled-for"
     "python-jsonref"
+    "python-py-key-value-aio"
+    "python-opentelemetry-api"
+
+    ### for litellm
+    "litellm"
+
+    ### for ai-tools
+    "jupyterlab-extension-jupyterlab_git"
+    "python-pycrdt"
+    "python-jupyter-ydoc"
+
+    ### for ai-router
+    # "python-jupyterlab-chat"
+    "jupyter-collaboration"
+
+    ### for persona-manager
+    "jupyter-server-fileid"
+    # "python-jupyterlab-chat"
+    "python-pycrdt"
+    "python-pydantic"
+    # "python-jupyter-ai-router"
+    
+
     # "python-langchain"
 
     # "python-opentelemetry"
@@ -103,6 +154,20 @@ for ext_pkg in *.pkg.tar.zst; do
     fi
 done
 shopt -u nullglob
+
+# Helper function to execute the build command with verbosity control
+run_build_command() {
+    set +e
+    if [ "$VERBOSE" -eq 1 ]; then
+        "${BUILD_CMD[@]}" "${CHROOT_INJECT_ARGS[@]}" 2>&1 | tee build.log
+        BUILD_STATUS=${PIPESTATUS[0]}
+    else
+        echo -e "\033[1;30m    -> (Build output hidden. Logging to build.log... run with --verbose to see live output)\033[0m"
+        "${BUILD_CMD[@]}" "${CHROOT_INJECT_ARGS[@]}" > build.log 2>&1
+        BUILD_STATUS=$?
+    fi
+    set -e
+}
 
 # Helper function to parse build logs
 parse_build_log() {
@@ -167,10 +232,7 @@ for entry in "${AUR_DEPENDENCIES[@]}"; do
         echo -e "\n# --- Injected by push-to-aur.sh ---\nmakedepends+=($formatted_deps)\ndepends+=($formatted_deps)" >> PKGBUILD
     fi
 
-    set +e
-    "${BUILD_CMD[@]}" "${CHROOT_INJECT_ARGS[@]}" 2>&1 | tee build.log
-    BUILD_STATUS=${PIPESTATUS[0]}
-    set -e
+    run_build_command
 
     if [ $BUILD_STATUS -ne 0 ]; then
         parse_build_log
@@ -203,10 +265,7 @@ for pkg in "${PACKAGES[@]}"; do
 
         namcap PKGBUILD || true
 
-        set +e
-        "${BUILD_CMD[@]}" "${CHROOT_INJECT_ARGS[@]}" 2>&1 | tee build.log
-        BUILD_STATUS=${PIPESTATUS[0]}
-        set -e
+        run_build_command
 
         if [ $BUILD_STATUS -ne 0 ]; then
             parse_build_log
