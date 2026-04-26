@@ -16,14 +16,15 @@ class Builder:
         return "unknown"
 
     def check_chroot_tools(self):
-        tool = None
         if self.os_type == "arch":
             tool = "extra-x86_64-build"
+            if shutil.which(tool):
+                return tool
         elif self.os_type == "manjaro":
-            tool = "buildpkg"
-        
-        if tool and shutil.which(tool):
-            return tool
+            for tool in ["chrootbuild", "buildpkg"]:
+                if shutil.which(tool):
+                    return tool
+
         return None
 
     def build(self, pkgname, directory, nocheck=False, custom_conf=None):
@@ -44,7 +45,7 @@ class Builder:
 
     def execute_chroot_build(self, tool, pkgname, directory, nocheck, custom_conf):
         cmd = [tool]
-        if tool == "buildpkg":
+        if tool in ["chrootbuild", "buildpkg"]:
             cmd.extend(["-p", pkgname])
         
         # TODO: Handle custom_conf for chroot tools if needed
