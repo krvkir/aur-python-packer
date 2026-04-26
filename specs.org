@@ -43,9 +43,12 @@ I want to make a fresh attempt on creating the testing/building script.
 
 ** 4. Build Environment (Distro-Aware)
 -   *Auto-Detection*: Identify if the host is running Arch Linux or Manjaro.
+-   *Default Chroot Build*: The system SHALL use chroot-based build tools by default.
 -   *Tooling Selection*:
     *   *Arch*: Use =extra-x86_64-build= from =devtools=.
-    *   *Manjaro*: Use =buildpkg= or a compatible =chrootbuild= script.
+    *   *Manjaro*: Use =buildpkg=.
+-   *Strictness*: The build SHALL fail if required chroot tools are missing from the system PATH.
+-   *Local Fallback*: Support a =--local= flag to bypass chroot and use =makepkg= directly on the host.
 -   *Configuration*: Auto-configure the chroot with the host's mirrorlist and repository settings.
 
 ** 5. Automated Updates & Maintenance
@@ -61,6 +64,16 @@ I want to make a fresh attempt on creating the testing/building script.
 -   *State Tracking*: Maintain a =build_status.json= to track which packages succeeded, failed, or are blocked by dependency failures.
 -   *Resume Capability*: Allow restarting the process from the point of failure without rebuilding the entire tree.
 -   *Circular Dependency Awareness*: Detect cycles early. Provide a hook for a future "Bootstrap Mode" (building with =--nocheck= or minimal dependencies).
+
+** 7. Project Structure & Environment
+-   *Unified Root Layout*: All source code (=src/=), tests (=tests/=), and configuration (=pyproject.toml=) are located at the repository root.
+-   *Package Identity*: The primary Python package is named =aur_python_packer=.
+-   *Dependency Management*: Use Poetry for managing dependencies, virtual environments, and packaging.
+
+** 8. CLI Interface
+-   *Configurable Work Directory*: Accept a =--work-dir= (or =-w=) option to specify the base directory for all tool state and artifacts.
+-   *Default Work Dir*: Default to a =work/= directory within the project root if not specified.
+-   *State Isolation*: All persistent data (state JSON, local repo, AUR cache) MUST be stored within the specified =work_dir=.
 
 ** Proposed Logic Flow (The Build Loop)
 #+begin_src python
