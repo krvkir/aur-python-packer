@@ -1,0 +1,84 @@
+Here is the Archlinux AUR package for JupyterAI software, with all its dependencies which are missing in AUR.
+
+The goal is to upload them to AUR so that any arch/manjaro user could install jupyter-ai.
+
+The packaging is not finished. Most of PKGBUILDs are created and produce packages, but the whole setup was not tested in a clean environment. Also, the packages were made a month ago, so the versions of many libraries that are specified in PKGBUILDs are slightly obsolete.
+
+There was an attempt to make a bash script which tests each package in a clean env, with all the dependencies it requires. The difficulty is that many of those packages depend on AUR packages, and there's no easy way to fulfill those dependencies. And the list of dependencies is indivifual for each package.
+
+I want to make a fresh attempt on creating the testing/building script.
+
+* Requirements Draft
+** Objectives
+-   *Recursive Lifecycle Management*: Automatically discover, build, and maintain a tree of AUR packages starting from a root target.
+-   *Hermetic Builds*: Ensure all packages are built in a clean chroot to prevent host-system contamination.
+-   *Automated Maintenance*: Keep the local package set synchronized with PyPI/Upstream versions.
+
+** 1. Dependency Resolution & Intelligence
+-   *Tiered Lookup Strategy*:
+    1.  *Local*: Directories containing a =PKGBUILD=.
+    2.  *Official Repos*: Standard Arch/Manjaro repositories.
+    3.  *AUR*: Fetch source from AUR if not found locally or in repos.
+-   *Metadata Caching*:
+    *   Parse =.SRCINFO= files if they exist and are newer than the =PKGBUILD=.
+    *   Otherwise, run =makepkg --printsrcinfo= and update the cache.
+-   *Recursive AUR Handling*: If an AUR package is fetched, recursively resolve its dependencies. Cache the resulting =.pkg.tar.zst= in a central storage area to avoid redundant builds.
+
+** 2. The "Smart Generator" (Missing Dependencies)
+-   *PyPI Integration*: When a dependency (e.g., =python-X=) is missing from all tiers, query the PyPI API.
+-   *Functional PKGBUILD Generation*: Use a template (similar to =pip2pkgbuild=) to generate a complete =PKGBUILD= including:
+    *   =pkgver= fetched from PyPI.
+    *   Standard Python =build= and =installer= calls.
+    *   Automated checksum generation (=updpkgsums=).
+-   *Review Flag*: Mark generated packages as =GENERATED= for manual verification before final submission to AUR.
+
+** 3. Orchestration & Local Repository
+-   *Ephemeral Pacman Repo*: 
+    *   Maintain a local directory of built =.pkg.tar.zst= files.
+    *   Use =repo-add= to manage a local database file (=localrepo.db.tar.gz=).
+-   *Chroot Injection*:
+    *   Mount the local repository inside the build chroot.
+    *   Append the local repo to the chroot's =/etc/pacman.conf= with =SigLevel = Optional TrustAll= to allow installing unsigned local packages.
+-   *Build Queue*: Calculate the topological sort of the dependency graph. Execute builds in order (leaves first).
+
+** 4. Build Environment (Distro-Aware)
+-   *Auto-Detection*: Identify if the host is running Arch Linux or Manjaro.
+-   *Tooling Selection*:
+    *   *Arch*: Use =extra-x86_64-build= from =devtools=.
+    *   *Manjaro*: Use =buildpkg= or a compatible =chrootbuild= script.
+-   *Configuration*: Auto-configure the chroot with the host's mirrorlist and repository settings.
+
+** 5. Automated Updates & Maintenance
+-   *Version Auditor*:
+    *   Periodically (or on-demand) check PyPI for newer versions of all local =python-*= packages.
+-   *Update Loop*:
+    1.  Identify version mismatch.
+    2.  Update =pkgver= in =PKGBUILD=.
+    3.  Run =updpkgsums=.
+    4.  Trigger a rebuild of the package and its reverse-dependencies if necessary.
+
+** 6. Failure Handling & Resilience
+-   *State Tracking*: Maintain a =build_status.json= to track which packages succeeded, failed, or are blocked by dependency failures.
+-   *Resume Capability*: Allow restarting the process from the point of failure without rebuilding the entire tree.
+-   *Circular Dependency Awareness*: Detect cycles early. Provide a hook for a future "Bootstrap Mode" (building with =--nocheck= or minimal dependencies).
+
+** Proposed Logic Flow (The Build Loop)
+#+begin_src python
+def orchestrate(target_pkg):
+    graph = build_dependency_graph(target_pkg)
+    ordered_list = topological_sort(graph)
+    
+    for pkg in ordered_list:
+        if pkg.is_built_and_current():
+            continue
+        
+        if pkg.is_missing():
+            pkg.generate_from_pypi()
+            
+        try:
+            pkg.build_in_chroot(repo_path="path/to/localrepo")
+            add_to_local_repo(pkg, "path/to/localrepo")
+        except BuildError:
+            mark_blocked_descendants(pkg)
+            continue
+#+end_src
