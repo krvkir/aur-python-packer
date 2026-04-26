@@ -1,4 +1,4 @@
-from aur_lifecycle_mgr.generator import PyPIGenerator
+from aur_python_packer.generator import PyPIGenerator
 
 class Auditor:
     def __init__(self, state):

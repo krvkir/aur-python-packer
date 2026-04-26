@@ -1,0 +1,10 @@
+*~
+#*#
+*.zst
+*.log
+src/*
+pkg/*
+*.pyc
+python-*/
+jupyter-*/
+????-??-??-*.org

@@ -25,25 +25,25 @@ package() {
 }
 EOF
 
-# Run the manager
-PYTHONPATH=src venv/bin/python src/aur_lifecycle_mgr/cli.py \
-    --state "$TEST_DIR/state.json" \
-    --repo "$TEST_DIR/repo" \
+# Run the manager with --local because we are in a test env without chroot
+poetry run aur-python-packer "$TEST_DIR/work" python-dummy \
+    --local \
     --path "$TEST_DIR/local_packages" \
-    build python-dummy
+    --nocheck
 
 # Verify results
-if [ ! -f "$TEST_DIR/repo/python-dummy-1.0.0-1-any.pkg.tar.zst" ]; then
+if [ ! -f "$TEST_DIR/work/local_repo/python-dummy-1.0.0-1-any.pkg.tar.zst" ]; then
     echo "FAILED: Package not found in repo"
+    ls -R "$TEST_DIR/work"
     exit 1
 fi
 
-if [ ! -f "$TEST_DIR/repo/localrepo.db.tar.gz" ]; then
+if [ ! -f "$TEST_DIR/work/local_repo/localrepo.db.tar.gz" ]; then
     echo "FAILED: Repo database not found"
     exit 1
 fi
 
-# Check state.json
-grep -q "success" "$TEST_DIR/state.json" || (echo "FAILED: State not updated to success"; exit 1)
+# Check build_index.json
+grep -q "success" "$TEST_DIR/work/build_index.json" || (echo "FAILED: State not updated to success"; exit 1)
 
 echo "INTEGRATION TEST PASSED"

@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch
-from aur_lifecycle_mgr.generator import PyPIGenerator
+from aur_python_packer.generator import PyPIGenerator
 
 @patch('requests.get')
 def test_fetch_pypi_meta(mock_get):

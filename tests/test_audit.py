@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch
-from aur_lifecycle_mgr.audit import Auditor
+from aur_python_packer.audit import Auditor
 
 def test_audit_outdated():
     state = {
@@ -9,7 +9,7 @@ def test_audit_outdated():
         }
     }
     
-    with patch('aur_lifecycle_mgr.generator.PyPIGenerator.fetch_meta') as mock_fetch:
+    with patch('aur_python_packer.generator.PyPIGenerator.fetch_meta') as mock_fetch:
         mock_fetch.return_value = {"version": "2.31.0"}
         
         auditor = Auditor(state)

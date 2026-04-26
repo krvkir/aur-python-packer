@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from aur_lifecycle_mgr.resolver import DependencyResolver
+from aur_python_packer.resolver import DependencyResolver
 
 def test_topological_sort_linear():
     resolver = DependencyResolver()
@@ -26,8 +26,8 @@ def test_circular_dependency():
     with pytest.raises(ValueError, match="Circular dependency detected"):
         resolver.get_build_order()
 
-@patch('aur_lifecycle_mgr.resolver.is_in_repos')
-@patch('aur_lifecycle_mgr.resolver.get_aur_info')
+@patch('aur_python_packer.resolver.is_in_repos')
+@patch('aur_python_packer.resolver.get_aur_info')
 @patch('os.path.isdir')
 def test_resolve_cascade(mock_isdir, mock_aur, mock_repo):
     # Setup mocks

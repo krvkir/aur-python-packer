@@ -1,6 +1,6 @@
 import os
 from unittest.mock import patch
-from aur_lifecycle_mgr.repo import RepoManager
+from aur_python_packer.repo import RepoManager
 
 def test_add_to_repo(tmp_path):
     repo_dir = tmp_path / "repo"
