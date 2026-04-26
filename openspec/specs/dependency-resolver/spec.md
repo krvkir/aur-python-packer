@@ -1,4 +1,9 @@
-## ADDED Requirements
+# Component: Dependency Resolver
+
+## Purpose
+Responsible for building and analyzing the dependency graph for a target package. It performs multi-tier lookups (Local, Official Repos, AUR, PyPI) to resolve every dependency and calculates the optimal build order using topological sorting. It also detects circular dependencies to prevent build-loop deadlocks.
+
+## Requirements
 
 ### Requirement: Multi-tier Dependency Resolution
 The system SHALL resolve dependencies by searching through the following tiers in order:

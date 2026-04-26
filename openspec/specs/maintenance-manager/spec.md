@@ -1,4 +1,9 @@
-## ADDED Requirements
+# Component: Maintenance Manager
+
+## Purpose
+Monitors the lifecycle of local packages by auditing their versions against upstream sources (primarily PyPI). It provides automated triggers to update `PKGBUILD` metadata, regenerate checksums, and initiate rebuilds when new versions are detected.
+
+## Requirements
 
 ### Requirement: Version Auditing
 The system SHALL compare the versions of locally managed packages against the latest available versions on PyPI.

@@ -1,4 +1,9 @@
-## ADDED Requirements
+# Component: Chroot Builder
+
+## Purpose
+Provides a distro-aware build isolation layer. It detects whether the host is running Arch Linux or Manjaro and executes the appropriate native tool (`extra-x86_64-build` or `buildpkg`) to build packages in a clean chroot environment, ensuring builds are hermetic and repeatable.
+
+## Requirements
 
 ### Requirement: Distro-Aware Build Orchestration
 The system SHALL detect the host operating system (Arch or Manjaro) and use the appropriate chroot build tool.

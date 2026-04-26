@@ -1,4 +1,9 @@
-## ADDED Requirements
+# Component: Package Generator
+
+## Purpose
+Automates the creation of Arch Linux packaging files for Python-based software. It queries the PyPI JSON API to retrieve metadata and uses standardized templates to generate `PKGBUILD` and `.SRCINFO` files, including automated source fetching and checksum verification.
+
+## Requirements
 
 ### Requirement: PyPI Metadata Fetching
 The system SHALL be able to retrieve package version, license, and dependency information from the PyPI JSON API for any given package name.

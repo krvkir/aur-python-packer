@@ -1,4 +1,9 @@
-## ADDED Requirements
+# Component: Repository Manager
+
+## Purpose
+Manages the local package repository used for dependency satisfaction during builds. It handles moving built packages into the repository, updating the pacman database via `repo-add`, and configuring build chroots to trust and utilize this local repository.
+
+## Requirements
 
 ### Requirement: Local Repository Maintenance
 The system SHALL maintain a local pacman repository directory containing all successfully built packages.
