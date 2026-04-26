@@ -11,6 +11,7 @@ def test_fetch_pypi_meta(mock_get):
             "summary": "Python HTTP for Humans.",
             "license": "Apache 2.0",
             "home_page": "https://requests.readthedocs.io",
+            "requires_dist": ["charset-normalizer", "idna"]
         }
     }
     mock_get.return_value.status_code = 200
@@ -19,6 +20,7 @@ def test_fetch_pypi_meta(mock_get):
     meta = gen.fetch_meta("requests")
     assert meta['name'] == "requests"
     assert meta['version'] == "2.31.0"
+    assert meta['requires_dist'] == ["charset-normalizer", "idna"]
 
 def test_render_pkgbuild():
     gen = PyPIGenerator()

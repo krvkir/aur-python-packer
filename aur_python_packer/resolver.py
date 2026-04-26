@@ -4,6 +4,7 @@ import subprocess
 
 import networkx as nx
 import requests
+from packaging.requirements import Requirement
 
 
 def parse_srcinfo(path):
@@ -93,9 +94,23 @@ class DependencyResolver:
                 self.resolve(dep_name)
             return
 
-        # 4. Check PyPI (Simplified for now, will expand in Phase 3)
+        # 4. Check PyPI
+        pyname = pkgname
         if pkgname.startswith("python-"):
-            self.graph.add_node(pkgname, tier="pypi")
+            pyname = pkgname[7:]
+
+        if pypi_verify_existence(pyname):
+            arch_name = normalize_pypi_name(pyname)
+            if pkgname != arch_name:
+                self.resolve(arch_name)
+                self.graph.add_edge(pkgname, arch_name)
+                return
+
+            self.graph.add_node(pkgname, tier="pypi", pyname=pyname)
+            deps = pypi_get_dependencies(pyname)
+            for dep in deps:
+                self.graph.add_edge(pkgname, dep)
+                self.resolve(dep)
             return
 
         raise ValueError(f"Could not resolve dependency: {pkgname}")
@@ -125,6 +140,49 @@ def is_in_repos(pkgname):
     except subprocess.CalledProcessError:
         return False
 
+
+def normalize_pypi_name(name):
+    """Normalize PyPI name to Arch python- package name."""
+    return f"python-{name.lower().replace('_', '-')}"
+
+
+def parse_pypi_dependency(req_str):
+    """Parse PEP 508 dependency string and return Arch package name if it applies."""
+    req = Requirement(req_str)
+    # Skip extra dependencies (e.g. [test], [doc]) for now
+    if req.marker:
+        # This is a very basic marker check. If it contains 'extra ==', skip it.
+        if 'extra ==' in str(req.marker):
+            return None
+    return normalize_pypi_name(req.name)
+
+
+def pypi_get_dependencies(pyname):
+    """Fetch dependencies for a PyPI package."""
+    url = f"https://pypi.org/pypi/{pyname}/json"
+    try:
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        requires_dist = data["info"].get("requires_dist") or []
+        deps = []
+        for req_str in requires_dist:
+            arch_dep = parse_pypi_dependency(req_str)
+            if arch_dep:
+                deps.append(arch_dep)
+        return deps
+    except Exception:
+        return []
+
+
+def pypi_verify_existence(pyname):
+    """Verify if a package exists on PyPI."""
+    url = f"https://pypi.org/pypi/{pyname}/json"
+    try:
+        resp = requests.get(url, timeout=10)
+        return resp.status_code == 200
+    except Exception:
+        return False
 
 def get_aur_info(pkgname):
     """Fetch package info from AUR RPC."""

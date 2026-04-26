@@ -57,9 +57,10 @@ class Manager:
                     self.state.update_package(pkg, "failed", "clone_error")
                     break
             elif tier == "pypi":
-                pyname = pkg.replace("python-", "")
+                pyname = node_data.get("pyname") or pkg.replace("python-", "")
                 pkg_dir = os.path.join(self.generated_dir, pkg)
-                self.generator.generate(pyname, pkg_dir)
+                depends = list(self.resolver.graph.successors(pkg))
+                self.generator.generate(pyname, pkg_dir, depends=depends)
                 generate_srcinfo(pkg_dir)
 
             if pkg_dir:

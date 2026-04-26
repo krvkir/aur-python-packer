@@ -8,3 +8,5 @@ pkg/*
 python-*/
 jupyter-*/
 ????-??-??-*.org
+*.orig
+poetry.lock

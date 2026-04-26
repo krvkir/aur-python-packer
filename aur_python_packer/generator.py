@@ -47,6 +47,7 @@ class PyPIGenerator:
             "summary": info["summary"],
             "home_page": info.get("home_page") or info.get("project_url"),
             "license": info.get("license") or "None",
+            "requires_dist": info.get("requires_dist") or [],
         }
 
     def get_sha256(self, pyname, version):
@@ -63,7 +64,7 @@ class PyPIGenerator:
     def render(self, meta):
         return self.template.render(**meta)
 
-    def generate(self, pyname, output_dir):
+    def generate(self, pyname, output_dir, depends=None):
         meta = self.fetch_meta(pyname)
         sha256 = self.get_sha256(pyname, meta["version"])
 
@@ -75,7 +76,7 @@ class PyPIGenerator:
             "url": meta["home_page"],
             "license": meta["license"],
             "sha256": sha256,
-            "depends": [],  # Dependency resolution would fill this
+            "depends": depends or [],
         }
 
         os.makedirs(output_dir, exist_ok=True)
