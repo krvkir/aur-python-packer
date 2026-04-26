@@ -1,5 +1,9 @@
 import os
 import re
+import subprocess
+
+import networkx as nx
+import requests
 
 
 def parse_srcinfo(path):
@@ -43,9 +47,6 @@ def parse_pkgbuild(path):
             deps = [d.strip("\"'") for d in deps_str.split()]
             metadata["depends"] = [re.split("[<>=]", d)[0] for d in deps]
     return metadata
-
-
-import networkx as nx
 
 
 class DependencyResolver:
@@ -116,9 +117,6 @@ class DependencyResolver:
         return None
 
 
-import subprocess
-
-
 def is_in_repos(pkgname):
     """Check if package is in official repos."""
     try:
@@ -126,9 +124,6 @@ def is_in_repos(pkgname):
         return True
     except subprocess.CalledProcessError:
         return False
-
-
-import requests
 
 
 def get_aur_info(pkgname):
@@ -143,6 +138,8 @@ def get_aur_info(pkgname):
     except Exception:
         pass
     return None
+
+
 def clone_aur_repo(pkgname, dest_parent):
     """Clone an AUR repository."""
     url = f"https://aur.archlinux.org/{pkgname}.git"
@@ -150,9 +147,11 @@ def clone_aur_repo(pkgname, dest_parent):
     if os.path.exists(dest_path):
         # Already exists, maybe update? For now just return path
         return dest_path
-    
+
     try:
-        subprocess.run(['git', 'clone', url, dest_path], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "clone", url, dest_path], check=True, capture_output=True
+        )
         return dest_path
     except subprocess.CalledProcessError:
         return None
