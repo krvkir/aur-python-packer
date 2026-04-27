@@ -22,9 +22,11 @@ class Manager:
         # self.generated_dir = os.path.join(self.work_dir, "generated")
         self.generated_dir = self.work_dir
         self.pacman_conf_path = os.path.join(self.work_dir, "pacman.conf")
+        self.pacman_db_path = os.path.join(self.work_dir, "pacman_db")
+        self.pacman_cache_path = os.path.join(self.work_dir, "pacman_cache")
 
         self.state = StateManager(self.state_file)
-        self.repo = RepoManager(self.repo_dir)
+        self.repo = RepoManager(self.repo_dir, db_path_override=self.pacman_db_path, cache_path_override=self.pacman_cache_path)
         self.builder = Builder(local_only=local_only)
         self.resolver = DependencyResolver(self.work_dir)
         self.generator = PyPIGenerator()
@@ -80,7 +82,7 @@ class Manager:
                         # But if we are not root, we might not be able to sync the system db
                         # Try to sync, but don't fail hard if it's just a permission error
                         # unless we are in local mode where we really need it.
-                        sync_cmd = ["sudo", "pacman", "-Sy", "--config", custom_conf]
+                        sync_cmd = ["pacman", "-Sy", "--config", custom_conf]
                         run_command(sync_cmd)
                     except subprocess.CalledProcessError as e:
                         if (
@@ -98,7 +100,7 @@ class Manager:
                             raise
                     pkg_file = self.builder.build(
                         pkg,
-                        os.path.dirname(pkg_dir),
+                        os.path.abspath(pkg_dir),
                         deps=self.repo.get_package_files(),
                         nocheck=nocheck,
                         custom_conf=custom_conf,

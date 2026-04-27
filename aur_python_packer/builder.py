@@ -55,16 +55,19 @@ class Builder:
     def execute_chroot_build(
         self, tool, pkgname, directory, deps, nocheck, custom_conf
     ):
-        cmd = ["sudo", tool]
+        sudo = [] if os.getuid() == 0 else ["sudo"]
+        cmd = sudo + [tool]
         if tool in ["chrootbuild", "buildpkg"]:
             cmd.extend(["-p", pkgname])
             if deps:
                 for dep in deps:
                     cmd.extend(["-i", dep])
+        
+        if tool == "chrootbuild" and custom_conf:
+            cmd.extend(["-C", custom_conf])
 
-        # TODO: Handle custom_conf for chroot tools if needed
-        logger.debug(f"Build dir is {directory}.")
-        run_command(cmd, cwd=directory, log_level=logging.INFO)
+        logger.debug(f"Build dir is {os.path.dirname(directory)}.")
+        run_command(cmd, cwd=os.path.dirname(directory), log_level=logging.INFO)
         return self._find_package_file(directory)
 
     def execute_local_build(self, pkgname, directory, nocheck, custom_conf):
