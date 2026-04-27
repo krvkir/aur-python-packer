@@ -1,12 +1,17 @@
 import glob
 import os
+import logging
 import shutil
 import subprocess
 
+from aur_python_packer.utils import run_command
+
+logger = logging.getLogger(__name__)
 
 class Builder:
     def __init__(self, local_only=False):
         self.os_type = self.detect_os()
+        logger.debug(f"Detected OS: {self.os_type}")
         self.local_only = local_only
 
     def detect_os(self):
@@ -36,7 +41,7 @@ class Builder:
 
         chroot_tool = self.check_chroot_tools()
         if chroot_tool:
-            print(f"Using build tool: {chroot_tool}")
+            logger.info(f"Using build tool: {chroot_tool}")
             return self.execute_chroot_build(
                 chroot_tool, pkgname, directory, deps, nocheck, custom_conf
             )
@@ -58,8 +63,8 @@ class Builder:
                     cmd.extend(["-i", dep])
 
         # TODO: Handle custom_conf for chroot tools if needed
-        print(f"Build dir is {directory}.")
-        subprocess.run(cmd, cwd=directory, check=True)
+        logger.debug(f"Build dir is {directory}.")
+        run_command(cmd, cwd=directory, log_level=logging.INFO)
         return self._find_package_file(directory)
 
     def execute_local_build(self, pkgname, directory, nocheck, custom_conf):
@@ -77,7 +82,7 @@ class Builder:
             os.chmod(wrapper_path, 0o755)
             env["PATH"] = wrapper_dir + os.pathsep + env["PATH"]
 
-        subprocess.run(cmd, cwd=directory, check=True, env=env)
+        run_command(cmd, cwd=directory, env=env, log_level=logging.INFO)
         return self._find_package_file(directory)
 
     def _find_package_file(self, directory):

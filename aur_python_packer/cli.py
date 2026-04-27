@@ -1,5 +1,6 @@
 import click
 from aur_python_packer.main import Manager
+from aur_python_packer.logger import setup_logging
 
 @click.command()
 @click.argument('workdir', type=click.Path(file_okay=False))
@@ -9,6 +10,10 @@ from aur_python_packer.main import Manager
 @click.option('--nocheck', is_flag=True, help="Skip package checks (tests)")
 def main(workdir, pkgname, local, path, nocheck):
     """AUR Python Packer - Automate AUR package builds."""
+    # Initialize logging
+    log_path = setup_logging(workdir)
+    print(f"Logging to: {log_path}")
+
     mgr = Manager(work_dir=workdir, local_only=local)
     if path:
         mgr.resolver.search_paths = list(path)

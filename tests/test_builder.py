@@ -9,11 +9,13 @@ def test_os_detection_arch(mock_exists):
     orch = Builder()
     assert orch.os_type == "arch"
 
-@patch('subprocess.run')
+@patch('aur_python_packer.builder.run_command')
 @patch('shutil.which')
 @patch('os.path.getmtime')
 @patch('glob.glob')
-def test_build_arch(mock_glob, mock_mtime, mock_which, mock_run):
+@patch('os.path.abspath')
+def test_build_arch(mock_abs, mock_glob, mock_mtime, mock_which, mock_run):
+    mock_abs.side_effect = lambda x: x
     mock_glob.return_value = ["/path/to/pkg/test-pkg-1.0.pkg.tar.zst"]
     mock_which.return_value = "/usr/bin/extra-x86_64-build"
     mock_mtime.return_value = 123456789

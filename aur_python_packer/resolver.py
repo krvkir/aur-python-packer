@@ -1,4 +1,5 @@
 import os
+import logging
 import re
 import subprocess
 
@@ -6,6 +7,9 @@ import networkx as nx
 import requests
 from packaging.requirements import Requirement
 
+from aur_python_packer.utils import run_command
+
+logger = logging.getLogger(__name__)
 
 def parse_srcinfo(path):
     """Parse .SRCINFO and return pkgname and depends."""
@@ -53,13 +57,14 @@ def parse_pkgbuild(path):
 class DependencyResolver:
     def __init__(self, search_paths=None):
         self.graph = nx.DiGraph()
-        self.search_paths = search_paths or [".", ".."]
+        self.search_paths = search_paths or ["."]
         self.visited = set()
 
     def get_build_order(self):
         try:
             return list(reversed(list(nx.topological_sort(self.graph))))
         except nx.NetworkXUnfeasible:
+            logger.error("Circular dependency detected in the dependency graph.")
             raise ValueError("Circular dependency detected")
 
     def resolve(self, pkgname):
@@ -67,9 +72,12 @@ class DependencyResolver:
             return
         self.visited.add(pkgname)
 
+        logger.debug(f"Resolving dependency: {pkgname}")
+
         # 1. Check Local
         local_meta = self._find_local(pkgname)
         if local_meta:
+            logger.debug(f"Found {pkgname} locally at {local_meta['path']}")
             self.graph.add_node(pkgname, tier="local", path=local_meta["path"])
             for dep in local_meta.get("depends", []):
                 self.graph.add_edge(pkgname, dep)
@@ -78,12 +86,14 @@ class DependencyResolver:
 
         # 2. Check Repos
         if is_in_repos(pkgname):
+            logger.debug(f"Found {pkgname} in official repositories")
             self.graph.add_node(pkgname, tier="repo")
             return
 
         # 3. Check AUR
         aur_meta = get_aur_info(pkgname)
         if aur_meta:
+            logger.debug(f"Found {pkgname} in AUR")
             self.graph.add_node(pkgname, tier="aur")
             # AUR RPC returns Depends and MakeDepends
             deps = aur_meta.get("Depends", []) + aur_meta.get("MakeDepends", [])
@@ -100,6 +110,7 @@ class DependencyResolver:
             pyname = pkgname[7:]
 
         if pypi_verify_existence(pyname):
+            logger.debug(f"Found {pyname} on PyPI")
             arch_name = normalize_pypi_name(pyname)
             if pkgname != arch_name:
                 self.resolve(arch_name)
@@ -113,6 +124,7 @@ class DependencyResolver:
                 self.resolve(dep)
             return
 
+        logger.error(f"Could not resolve dependency: {pkgname}")
         raise ValueError(f"Could not resolve dependency: {pkgname}")
 
     def _find_local(self, pkgname):
@@ -135,7 +147,7 @@ class DependencyResolver:
 def is_in_repos(pkgname):
     """Check if package is in official repos."""
     try:
-        subprocess.run(["pacman", "-Si", pkgname], capture_output=True, check=True)
+        run_command(["pacman", "-Si", pkgname])
         return True
     except subprocess.CalledProcessError:
         return False
@@ -207,9 +219,8 @@ def clone_aur_repo(pkgname, dest_parent):
         return dest_path
 
     try:
-        subprocess.run(
-            ["git", "clone", url, dest_path], check=True, capture_output=True
-        )
+        run_command(["git", "clone", url, dest_path])
         return dest_path
     except subprocess.CalledProcessError:
+        logger.error(f"Failed to clone AUR repo for {pkgname}")
         return None

@@ -1,9 +1,14 @@
 import hashlib
+import logging
 import os
 import subprocess
 
 import requests
 from jinja2 import Template
+
+from aur_python_packer.utils import run_command
+
+logger = logging.getLogger(__name__)
 
 PKGBUILD_TEMPLATE = """
 pkgname={{ pkgname }}
@@ -36,6 +41,7 @@ class PyPIGenerator:
         self.template = Template(PKGBUILD_TEMPLATE)
 
     def fetch_meta(self, pyname):
+        logger.debug(f"Fetching PyPI metadata for {pyname}")
         url = f"https://pypi.org/pypi/{pyname}/json"
         resp = requests.get(url)
         resp.raise_for_status()
@@ -52,6 +58,7 @@ class PyPIGenerator:
 
     def get_sha256(self, pyname, version):
         # This is a bit complex as we need to find the correct sdist URL
+        logger.debug(f"Fetching PyPI release info for {pyname}=={version} to get SHA256")
         url = f"https://pypi.org/pypi/{pyname}/{version}/json"
         resp = requests.get(url)
         resp.raise_for_status()
@@ -82,6 +89,7 @@ class PyPIGenerator:
         os.makedirs(output_dir, exist_ok=True)
         pkgbuild_path = os.path.join(output_dir, "PKGBUILD")
         with open(pkgbuild_path, "w") as f:
+            logger.debug(f"Generating PKGBUILD at {pkgbuild_path}")
             f.write(self.render(pkg_data))
         return pkgbuild_path
 
@@ -89,15 +97,11 @@ class PyPIGenerator:
 def generate_srcinfo(directory):
     """Run makepkg --printsrcinfo and save to .SRCINFO."""
     try:
-        result = subprocess.run(
-            ["makepkg", "--printsrcinfo"],
-            cwd=directory,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
+        logger.debug(f"Generating .SRCINFO in {directory}")
+        result = run_command(["makepkg", "--printsrcinfo"], cwd=directory)
         with open(os.path.join(directory, ".SRCINFO"), "w") as f:
             f.write(result.stdout)
         return True
     except subprocess.CalledProcessError:
+        logger.error(f"Failed to generate .SRCINFO in {directory}")
         return False

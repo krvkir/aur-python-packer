@@ -8,7 +8,7 @@ def test_add_to_repo(tmp_path):
     pkg_file = tmp_path / "test-1.0-1-any.pkg.tar.zst"
     pkg_file.write_text("package content")
     
-    with patch('subprocess.run') as mock_run:
+    with patch('aur_python_packer.repo.run_command') as mock_run:
         mgr = RepoManager(str(repo_dir))
         mgr.add_package(str(pkg_file))
         

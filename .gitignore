@@ -9,4 +9,5 @@ python-*/
 jupyter-*/
 ????-??-??-*.org
 *.orig
+*.rej
 poetry.lock

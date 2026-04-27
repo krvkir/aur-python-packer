@@ -1,4 +1,5 @@
 import os
+import logging
 import subprocess
 
 from aur_python_packer.builder import Builder
@@ -6,7 +7,9 @@ from aur_python_packer.generator import PyPIGenerator, generate_srcinfo
 from aur_python_packer.repo import RepoManager
 from aur_python_packer.resolver import DependencyResolver, clone_aur_repo
 from aur_python_packer.state import StateManager
+from aur_python_packer.utils import run_command
 
+logger = logging.getLogger(__name__)
 
 class Manager:
     def __init__(self, work_dir="work", local_only=False):
@@ -27,10 +30,10 @@ class Manager:
         self.generator = PyPIGenerator()
 
     def build_all(self, target_pkg, nocheck=False):
-        print(f"Resolving dependencies for {target_pkg}...")
+        logger.info(f"Resolving dependencies for {target_pkg}...")
         self.resolver.resolve(target_pkg)
         order = self.resolver.get_build_order()
-        print(f"Build order: {' -> '.join(order)}")
+        logger.info(f"Build order: {' -> '.join(order)}")
 
         for pkg in order:
             node_data = self.resolver.graph.nodes[pkg]
@@ -39,13 +42,13 @@ class Manager:
             # Check if already built in this run or previous
             current_state = self.state.get_package(pkg)
             if current_state and current_state.get("status") == "success":
-                print(f"Package {pkg} already built, skipping.")
+                logger.info(f"Package {pkg} already built, skipping.")
                 continue
 
-            print(f"Processing {pkg} (Tier: {tier})...")
+            logger.info(f"Processing {pkg} (Tier: {tier})...")
 
             if tier == "repo":
-                print(f"{pkg} is in official repos, no build needed.")
+                logger.info(f"{pkg} is in official repos, no build needed.")
                 continue
 
             pkg_dir = None
@@ -54,7 +57,7 @@ class Manager:
             elif tier == "aur":
                 pkg_dir = clone_aur_repo(pkg, self.aur_cache_dir)
                 if not pkg_dir:
-                    print(f"Failed to clone AUR repo for {pkg}")
+                    logger.error(f"Failed to clone AUR repo for {pkg}")
                     self.state.update_package(pkg, "failed", "clone_error")
                     break
             elif tier == "pypi":
@@ -78,22 +81,20 @@ class Manager:
                         # Try to sync, but don't fail hard if it's just a permission error
                         # unless we are in local mode where we really need it.
                         sync_cmd = ["sudo", "pacman", "-Sy", "--config", custom_conf]
-                        subprocess.run(
-                            sync_cmd, check=True, capture_output=True, text=True
-                        )
+                        run_command(sync_cmd)
                     except subprocess.CalledProcessError as e:
                         if (
-                            "permission denied" in e.stderr.lower()
-                            or "sudo" in e.stderr.lower()
-                            or "unless you are root" in e.stderr.lower()
+                            "permission denied" in str(e.output).lower()
+                            or "sudo" in str(e.output).lower()
+                            or "unless you are root" in str(e.output).lower()
                         ):
-                            print(
-                                f"Warning: Could not sync pacman database: {e.stderr.strip()}"
+                            logger.warning(
+                                f"Could not sync pacman database: {str(e.output).strip()}"
                             )
                             if self.builder.local_only:
-                                print("Proceeding without sync for local build...")
+                                logger.info("Proceeding without sync for local build...")
                         elif "localrepo.db" not in e.stderr:
-                            print(f"Error syncing pacman: {e.stderr}")
+                            logger.error(f"Error syncing pacman: {e.output}")
                             raise
                     pkg_file = self.builder.build(
                         pkg,
@@ -104,8 +105,8 @@ class Manager:
                     )
                     self.repo.add_package(pkg_file)
                     self.state.update_package(pkg, "built", "success")
-                    print(f"Successfully built and added {pkg}")
+                    logger.info(f"Successfully built and added {pkg}")
                 except Exception as e:
-                    print(f"Failed to build {pkg}: {e}")
+                    logger.error(f"Failed to build {pkg}: {e}")
                     self.state.update_package(pkg, "failed", "error")
                     break
