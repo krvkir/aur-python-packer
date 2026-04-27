@@ -12,7 +12,7 @@ from aur_python_packer.utils import run_command
 logger = logging.getLogger(__name__)
 
 class Manager:
-    def __init__(self, work_dir="work", local_only=False):
+    def __init__(self, work_dir="work"):
         self.work_dir = os.path.abspath(work_dir)
         os.makedirs(self.work_dir, exist_ok=True)
 
@@ -24,10 +24,18 @@ class Manager:
         self.pacman_conf_path = os.path.join(self.work_dir, "pacman.conf")
         self.pacman_db_path = os.path.join(self.work_dir, "pacman_db")
         self.pacman_cache_path = os.path.join(self.work_dir, "pacman_cache")
+        self.pacman_log_path = os.path.join(self.work_dir, "pacman.log")
+        self.gpg_dir = os.path.join(self.work_dir, "gnupg")
 
         self.state = StateManager(self.state_file)
-        self.repo = RepoManager(self.repo_dir, db_path_override=self.pacman_db_path, cache_path_override=self.pacman_cache_path)
-        self.builder = Builder(local_only=local_only)
+        self.repo = RepoManager(
+            self.repo_dir,
+            db_path_override=self.pacman_db_path,
+            cache_path_override=self.pacman_cache_path,
+            log_path_override=self.pacman_log_path,
+            gpg_dir_override=self.gpg_dir
+        )
+        self.builder = Builder(work_dir=self.work_dir)
         self.resolver = DependencyResolver(self.work_dir)
         self.generator = PyPIGenerator()
 
@@ -79,23 +87,9 @@ class Manager:
                     # Sync local repo to allow pacman to find freshly built dependencies
                     try:
                         # If we have a local repo db, we should sync it
-                        # But if we are not root, we might not be able to sync the system db
-                        # Try to sync, but don't fail hard if it's just a permission error
-                        # unless we are in local mode where we really need it.
-                        sync_cmd = ["pacman", "-Sy", "--config", custom_conf]
+                        sync_cmd = ["pacman", "-Sy", "--config", custom_conf, "--dbpath", self.pacman_db_path]
                         run_command(sync_cmd)
                     except subprocess.CalledProcessError as e:
-                        if (
-                            "permission denied" in str(e.output).lower()
-                            or "sudo" in str(e.output).lower()
-                            or "unless you are root" in str(e.output).lower()
-                        ):
-                            logger.warning(
-                                f"Could not sync pacman database: {str(e.output).strip()}"
-                            )
-                            if self.builder.local_only:
-                                logger.info("Proceeding without sync for local build...")
-                        elif "localrepo.db" not in e.stderr:
                             logger.error(f"Error syncing pacman: {e.output}")
                             raise
                     pkg_file = self.builder.build(

@@ -9,12 +9,15 @@ from aur_python_packer.utils import run_command
 logger = logging.getLogger(__name__)
 
 class RepoManager:
-    def __init__(self, repo_dir, db_name="localrepo", db_path_override=None, cache_path_override=None):
+    def __init__(self, repo_dir, db_name="localrepo", db_path_override=None, cache_path_override=None, log_path_override=None, gpg_dir_override=None):
         self.repo_dir = os.path.abspath(repo_dir)
         self.db_name = db_name
         self.db_path = os.path.join(self.repo_dir, f"{db_name}.db.tar.gz")
         self.db_path_override = db_path_override
         self.cache_path_override = cache_path_override
+        self.log_path_override = log_path_override
+        self.gpg_dir_override = gpg_dir_override
+
         os.makedirs(self.repo_dir, exist_ok=True)
         if self.db_path_override:
             os.makedirs(self.db_path_override, exist_ok=True)
@@ -66,6 +69,12 @@ Server = file://{self.repo_dir}
         
         if self.cache_path_override:
             overrides.append(f"CacheDir = {self.cache_path_override}")
+
+        if self.log_path_override:
+            overrides.append(f"LogFile = {self.log_path_override}")
+
+        if self.gpg_dir_override:
+            overrides.append(f"GPGDir = {self.gpg_dir_override}")
 
         with open(output_path, 'w') as f:
             f.write("\n".join(overrides) + "\n")

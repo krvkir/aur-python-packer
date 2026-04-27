@@ -9,83 +9,106 @@ from aur_python_packer.utils import run_command
 logger = logging.getLogger(__name__)
 
 class Builder:
-    def __init__(self, local_only=False):
-        self.os_type = self.detect_os()
-        logger.debug(f"Detected OS: {self.os_type}")
-        self.local_only = local_only
+    def __init__(self, work_dir):
+        self.work_dir = os.path.abspath(work_dir)
+        self.root_dir = os.path.join(self.work_dir, "root")
+        self.bin_dir = os.path.join(self.work_dir, "bin")
+        self._check_dependencies()
 
-    def detect_os(self):
-        if os.path.exists("/etc/manjaro-release"):
-            return "manjaro"
-        if os.path.exists("/etc/arch-release"):
-            return "arch"
-        return "unknown"
+    def _check_dependencies(self):
+        if not shutil.which("bwrap"):
+            raise RuntimeError("bubblewrap (bwrap) is required for rootless builds.")
+        
+        # Check for unprivileged user namespace support
+        try:
+            subprocess.run(["unshare", "--user", "true"], check=True, capture_output=True)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            raise RuntimeError(
+                "Unprivileged user namespaces are not supported or disabled. "
+                "Ensure /proc/sys/kernel/unprivileged_userns_clone is 1 (on some distros) "
+                "or your kernel supports them."
+            )
 
-    def check_chroot_tools(self):
-        if self.os_type == "arch":
-            tool = "extra-x86_64-build"
-            if shutil.which(tool):
-                return tool
-        elif self.os_type == "manjaro":
-            for tool in ["chrootbuild", "buildpkg"]:
-                if shutil.which(tool):
-                    return tool
+    def _bootstrap_root(self, custom_conf):
+        if os.path.exists(os.path.join(self.root_dir, "etc/pacman.conf")):
+            return
 
-        return None
+        logger.info(f"Bootstrapping minimal root at {self.root_dir}...")
+        os.makedirs(self.root_dir, exist_ok=True)
+        
+        # Use pacman --root to install base-devel into the directory
+        cmd = [
+            "pacman", "-Sy", "base-devel", "pacman", "--noconfirm",
+            "--root", self.root_dir,
+            "--config", custom_conf,
+        ]
+        run_command(cmd)
+
+    def _generate_sudo_shim(self, custom_conf):
+        os.makedirs(self.bin_dir, exist_ok=True)
+        shim_path = os.path.join(self.bin_dir, "sudo")
+        
+        # We want the shim to use the custom pacman.conf
+        with open(shim_path, "w") as f:
+            f.write("#!/bin/sh\n")
+            f.write('if [ "$1" = "pacman" ]; then\n')
+            f.write('    shift\n')
+            f.write(f'    exec pacman --config "{custom_conf}" "$@"\n')
+            f.write('fi\n')
+            f.write('exec "$@"\n')
+        
+        os.chmod(shim_path, 0o755)
+        return shim_path
+
+    def _run_in_sandbox(self, cmd, cwd, custom_conf):
+        self._generate_sudo_shim(custom_conf)
+        
+        # bwrap command construction
+        bwrap_cmd = [
+            "bwrap",
+            "--unshare-user",
+            "--uid", "0",
+            "--gid", "0",
+            "--bind", self.root_dir, "/",
+            "--dev", "/dev",
+            "--proc", "/proc",
+            "--tmpfs", "/tmp",
+            "--bind", self.work_dir, self.work_dir,
+            "--ro-bind", "/etc/resolv.conf", "/etc/resolv.conf",
+            "--setenv", "PATH", f"/usr/bin:{self.bin_dir}",
+            "--setenv", "HOME", "/root",
+            "--chdir", cwd
+        ]
+        
+        # Also bind-mount the directory being built if it's outside work_dir
+        if not cwd.startswith(self.work_dir):
+             bwrap_cmd.extend(["--bind", cwd, cwd])
+
+        bwrap_cmd.extend(cmd)
+        
+        run_command(bwrap_cmd, log_level=logging.INFO)
 
     def build(self, pkgname, directory, deps=None, nocheck=False, custom_conf=None):
         directory = os.path.abspath(directory)
-
-        if self.local_only:
-            return self.execute_local_build(pkgname, directory, nocheck, custom_conf)
-
-        chroot_tool = self.check_chroot_tools()
-        if chroot_tool:
-            logger.info(f"Using build tool: {chroot_tool}")
-            return self.execute_chroot_build(
-                chroot_tool, pkgname, directory, deps, nocheck, custom_conf
-            )
-
-        raise RuntimeError(
-            f"Chroot build tools not found for OS type '{self.os_type}'. "
-            "Install 'devtools' (Arch) or 'manjaro-tools-pkg' (Manjaro), "
-            "or use --local to build on the host system."
-        )
-
-    def execute_chroot_build(
-        self, tool, pkgname, directory, deps, nocheck, custom_conf
-    ):
-        sudo = [] if os.getuid() == 0 else ["sudo"]
-        cmd = sudo + [tool]
-        if tool in ["chrootbuild", "buildpkg"]:
-            cmd.extend(["-p", pkgname])
-            if deps:
-                for dep in deps:
-                    cmd.extend(["-i", dep])
         
-        if tool == "chrootbuild" and custom_conf:
-            cmd.extend(["-C", custom_conf])
+        if not custom_conf:
+            raise ValueError("custom_conf is required for rootless builds")
 
-        logger.debug(f"Build dir is {os.path.dirname(directory)}.")
-        run_command(cmd, cwd=os.path.dirname(directory), log_level=logging.INFO)
-        return self._find_package_file(directory)
+        self._bootstrap_root(custom_conf)
+        return self.execute_sandboxed_build(pkgname, directory, deps, nocheck, custom_conf)
 
-    def execute_local_build(self, pkgname, directory, nocheck, custom_conf):
+    def execute_sandboxed_build(self, pkgname, directory, deps, nocheck, custom_conf):
+        # Build command for makepkg
+        # We use -s to install dependencies, which will use our sudo shim
         cmd = ["makepkg", "-s", "-f", "--noconfirm", "--skippgpcheck"]
         if nocheck:
             cmd.append("--nocheck")
 
-        env = os.environ.copy()
-        if custom_conf:
-            wrapper_dir = os.path.join(os.path.dirname(custom_conf), "bin")
-            os.makedirs(wrapper_dir, exist_ok=True)
-            wrapper_path = os.path.join(wrapper_dir, "pacman")
-            with open(wrapper_path, "w") as f:
-                f.write(f'#!/bin/bash\n/usr/bin/pacman --config "{custom_conf}" "$@"\n')
-            os.chmod(wrapper_path, 0o755)
-            env["PATH"] = wrapper_dir + os.pathsep + env["PATH"]
+        # Ensure the build user can write to the directory
+        # In the sandbox we are root (uid 0), and we mapped our current user to uid 0.
+        # So we should have permission.
 
-        run_command(cmd, cwd=directory, env=env, log_level=logging.INFO)
+        self._run_in_sandbox(cmd, cwd=directory, custom_conf=custom_conf)
         return self._find_package_file(directory)
 
     def _find_package_file(self, directory):

@@ -5,16 +5,15 @@ from aur_python_packer.logger import setup_logging
 @click.command()
 @click.argument('workdir', type=click.Path(file_okay=False))
 @click.argument('pkgname')
-@click.option('--local', is_flag=True, help="Build on local host instead of chroot")
 @click.option('--path', '-P', multiple=True, help="Search paths for local PKGBUILDs")
 @click.option('--nocheck', is_flag=True, help="Skip package checks (tests)")
-def main(workdir, pkgname, local, path, nocheck):
+def main(workdir, pkgname, path, nocheck):
     """AUR Python Packer - Automate AUR package builds."""
     # Initialize logging
     log_path = setup_logging(workdir)
     print(f"Logging to: {log_path}")
 
-    mgr = Manager(work_dir=workdir, local_only=local)
+    mgr = Manager(work_dir=workdir)
     if path:
         mgr.resolver.search_paths = list(path)
     
