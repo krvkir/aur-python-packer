@@ -92,6 +92,7 @@ class Manager:
                     except subprocess.CalledProcessError as e:
                             logger.error(f"Error syncing pacman: {e.output}")
                             raise
+                    version = node_data.get("version", "unknown")
                     pkg_file = self.builder.build(
                         pkg,
                         os.path.abspath(pkg_dir),
@@ -100,7 +101,7 @@ class Manager:
                         custom_conf=custom_conf,
                     )
                     self.repo.add_package(pkg_file)
-                    self.state.update_package(pkg, "built", "success")
+                    self.state.update_package(pkg, version, "success")
                     logger.info(f"Successfully built and added {pkg}")
                 except Exception as e:
                     logger.error(f"Failed to build {pkg}: {e}")

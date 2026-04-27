@@ -94,7 +94,12 @@ class DependencyResolver:
         aur_meta = get_aur_info(pkgname)
         if aur_meta:
             logger.debug(f"Found {pkgname} in AUR")
-            self.graph.add_node(pkgname, tier="aur")
+            self.graph.add_node(
+                pkgname,
+                tier="aur",
+                version=aur_meta.get("Version"),
+                pkgname=aur_meta.get("Name"),
+            )
             # AUR RPC returns Depends and MakeDepends
             deps = aur_meta.get("Depends", []) + aur_meta.get("MakeDepends", [])
             for dep in deps:
@@ -117,7 +122,14 @@ class DependencyResolver:
                 self.graph.add_edge(pkgname, arch_name)
                 return
 
-            self.graph.add_node(pkgname, tier="pypi", pyname=pyname)
+            # Fetch metadata to get version
+            pypi_meta = pypi_get_full_meta(pyname)
+            self.graph.add_node(
+                pkgname,
+                tier="pypi",
+                pyname=pyname,
+                version=pypi_meta.get("version"),
+            )
             deps = pypi_get_dependencies(pyname)
             for dep in deps:
                 self.graph.add_edge(pkgname, dep)
@@ -167,6 +179,14 @@ def parse_pypi_dependency(req_str):
         if 'extra ==' in str(req.marker):
             return None
     return normalize_pypi_name(req.name)
+
+
+def pypi_get_full_meta(pyname):
+    """Fetch full metadata for a PyPI package."""
+    url = f"https://pypi.org/pypi/{pyname}/json"
+    resp = requests.get(url, timeout=10)
+    resp.raise_for_status()
+    return resp.json()["info"]
 
 
 def pypi_get_dependencies(pyname):

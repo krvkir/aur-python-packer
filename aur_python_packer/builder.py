@@ -84,9 +84,11 @@ class Builder:
         if not cwd.startswith(self.work_dir):
              bwrap_cmd.extend(["--bind", cwd, cwd])
 
+        logger.debug(f"Sandbox CWD: {cwd}")
+        logger.debug(f"Sandbox PATH: /usr/bin:{self.bin_dir}")
         bwrap_cmd.extend(cmd)
-        
-        run_command(bwrap_cmd, log_level=logging.INFO)
+
+        run_command(bwrap_cmd)
 
     def build(self, pkgname, directory, deps=None, nocheck=False, custom_conf=None):
         directory = os.path.abspath(directory)
@@ -104,11 +106,13 @@ class Builder:
         if nocheck:
             cmd.append("--nocheck")
 
+        logger.info(f"Starting sandboxed build for {pkgname}...")
         # Ensure the build user can write to the directory
         # In the sandbox we are root (uid 0), and we mapped our current user to uid 0.
         # So we should have permission.
 
         self._run_in_sandbox(cmd, cwd=directory, custom_conf=custom_conf)
+        logger.info(f"Successfully finished building {pkgname}")
         return self._find_package_file(directory)
 
     def _find_package_file(self, directory):

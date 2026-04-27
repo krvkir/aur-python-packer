@@ -19,8 +19,8 @@ def run_command(cmd, cwd=None, env=None, check=True, log_level=logging.DEBUG):
     Logs the command and any environment overrides at DEBUG level.
     """
     logger.debug(f"Executing command: {' '.join(cmd)}")
-    if cwd:
-        logger.debug(f"CWD: {cwd}")
+    effective_cwd = cwd if cwd else os.getcwd()
+    logger.debug(f"CWD: {effective_cwd}")
     if env:
         # Only log differences/overrides if we were to compare with os.environ,
         # but here we just log what's passed in 'env' as requested.
@@ -45,7 +45,11 @@ def run_command(cmd, cwd=None, env=None, check=True, log_level=logging.DEBUG):
     return_code = process.wait()
 
     if check and return_code != 0:
-        error_msg = f"Command '{' '.join(cmd)}' failed with exit code {return_code}"
+        last_output = "\n".join(output_lines[-5:])
+        error_msg = (
+            f"Command '{' '.join(cmd)}' failed with exit code {return_code}.\n"
+            f"Last output:\n{last_output}"
+        )
         logger.error(error_msg)
         # Raise exception similar to subprocess.run(check=True)
         raise subprocess.CalledProcessError(
