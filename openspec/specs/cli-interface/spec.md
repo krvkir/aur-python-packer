@@ -27,3 +27,10 @@ If no `--work-dir` is provided, the CLI SHALL default to a directory named `work
 #### Scenario: No work directory provided
 - **WHEN** the user runs the tool without the `--work-dir` flag
 - **THEN** the system defaults to using the `work/` directory in the current project root
+
+### Requirement: Log file path visibility
+The CLI SHALL print the absolute path to the current session's log file to the terminal at the beginning of the run.
+
+#### Scenario: User feedback on startup
+- **WHEN** the tool starts
+- **THEN** it MUST print a message like "Logging to: /path/to/work/logs/run_timestamp.log" before performing any other actions

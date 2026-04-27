@@ -17,11 +17,12 @@ The system SHALL detect the host operating system (Arch or Manjaro) and use the 
 - **THEN** the system SHALL execute `buildpkg` (from `manjaro-tools`) or a compatible chroot wrapper.
 
 ### Requirement: Build Success Verification
-The system SHALL verify that a build produced the expected `.pkg.tar.zst` file and mark the build as successful in the state tracker.
+The system SHALL verify that a build produced the expected `.pkg.tar.zst` file and mark the build as successful in the state tracker. It SHALL log the build progress to the log file and provide high-level status to the terminal.
 
 #### Scenario: Successful build tracking
 - **WHEN** a build command exits with status 0 and a package file is created
 - **THEN** the system SHALL update the `build_state.json` with the new timestamp and version.
+- **THEN** the full build log MUST be available in the session log file.
 
 ### Requirement: Default Chroot Build
 The `Builder` SHALL use chroot-based build tools by default based on the detected host operating system.
