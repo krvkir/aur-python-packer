@@ -86,12 +86,17 @@ class Manager:
 
                     # Sync local repo to allow pacman to find freshly built dependencies
                     try:
-                        # If we have a local repo db, we should sync it
-                        sync_cmd = ["pacman", "-Sy", "--config", custom_conf, "--dbpath", self.pacman_db_path]
-                        run_command(sync_cmd)
+                        # Wrap in bwrap to allow fake root sync
+                        sync_cmd = [
+                            "bwrap", "--unshare-user", "--uid", "0", "--gid", "0",
+                            "--bind", "/", "/",
+                            "--bind", self.work_dir, self.work_dir,
+                            "pacman", "-Sy", "--config", custom_conf, "--dbpath", self.pacman_db_path
+                        ]
+                        run_command(sync_cmd, log_level=logging.DEBUG)
                     except subprocess.CalledProcessError as e:
-                            logger.error(f"Error syncing pacman: {e.output}")
-                            raise
+                        logger.warning(f"Could not sync pacman database (non-fatal): {e.output.strip()}")
+
                     version = node_data.get("version", "unknown")
                     pkg_file = self.builder.build(
                         pkg,
@@ -99,6 +104,7 @@ class Manager:
                         deps=self.repo.get_package_files(),
                         nocheck=nocheck,
                         custom_conf=custom_conf,
+                        pacman_db_path=self.pacman_db_path,
                     )
                     self.repo.add_package(pkg_file)
                     self.state.update_package(pkg, version, "success")

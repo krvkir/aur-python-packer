@@ -100,8 +100,8 @@ class DependencyResolver:
                 version=aur_meta.get("Version"),
                 pkgname=aur_meta.get("Name"),
             )
-            # AUR RPC returns Depends and MakeDepends
-            deps = aur_meta.get("Depends", []) + aur_meta.get("MakeDepends", [])
+            # AUR RPC returns Depends, MakeDepends, and CheckDepends
+            deps = aur_meta.get("Depends", []) + aur_meta.get("MakeDepends", []) + aur_meta.get("CheckDepends", [])
             for dep in deps:
                 # Strip version constraints
                 dep_name = re.split("[<>=]", dep)[0]

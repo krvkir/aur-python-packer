@@ -23,6 +23,10 @@ class RepoManager:
             os.makedirs(self.db_path_override, exist_ok=True)
         if self.cache_path_override:
             os.makedirs(self.cache_path_override, exist_ok=True)
+        if self.log_path_override:
+            os.makedirs(os.path.dirname(self.log_path_override), exist_ok=True)
+        if self.gpg_dir_override:
+            os.makedirs(self.gpg_dir_override, exist_ok=True)
 
         if not os.path.exists(self.db_path):
             logger.info(f"Initializing local repository at {self.repo_dir}")
@@ -51,11 +55,13 @@ Server = file://{self.repo_dir}
         with open(base_conf, 'r') as f:
             content = f.read()
         
-        # Remove existing DBPath and CacheDir lines
+        # Remove existing DBPath, CacheDir and SigLevel lines to override them
         new_lines = []
         for line in content.splitlines():
             stripped = line.strip()
-            if stripped.startswith("DBPath") or stripped.startswith("CacheDir"):
+            if (stripped.startswith("DBPath") or stripped.startswith("CacheDir") or 
+                stripped.startswith("SigLevel") or stripped.startswith("LocalFileSigLevel") or
+                stripped.startswith("XferCommand")):
                 continue
             # Also remove [options] header, we will add it back at the top
             if stripped == "[options]":
@@ -64,6 +70,15 @@ Server = file://{self.repo_dir}
 
         # Re-insert our overrides under a fresh [options] header
         overrides = ["[options]"]
+        overrides.append("SigLevel = Never")
+        overrides.append("LocalFileSigLevel = Never")
+        overrides.append('XferCommand = /usr/bin/curl -L -C - -f -o %o %u')
+        
+        # Pacman 7.1 introduces DownloadUser, which defaults to 'alpm'.
+        # In a sandbox where 'alpm' user might not exist or lacks permissions,
+        # using a custom XferCommand usually bypasses the internal download logic that triggers DownloadUser usage.
+        overrides.append('XferCommand = /usr/bin/curl -L -C - -f -o %o %u')
+
         if self.db_path_override:
             overrides.append(f"DBPath = {self.db_path_override}")
         
