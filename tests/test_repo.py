@@ -13,7 +13,7 @@ def test_add_to_repo(tmp_path):
         mgr.add_package(str(pkg_file))
         
         assert (repo_dir / "test-1.0-1-any.pkg.tar.zst").exists()
-        mock_run.assert_called_once()
-        args = mock_run.call_args[0][0]
+        assert mock_run.call_count == 2
+        args = mock_run.call_args_list[1][0][0]
         assert "repo-add" in args
         assert str(repo_dir / "localrepo.db.tar.gz") in args

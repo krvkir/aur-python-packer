@@ -1,4 +1,5 @@
 import os
+import glob
 import shutil
 import subprocess
 
@@ -8,6 +9,12 @@ class RepoManager:
         self.db_name = db_name
         self.db_path = os.path.join(self.repo_dir, f"{db_name}.db.tar.gz")
         os.makedirs(self.repo_dir, exist_ok=True)
+
+        if not os.path.exists(self.db_path):
+            subprocess.run(
+                ['repo-add', self.db_path],
+                capture_output=True
+            )
 
     def add_package(self, pkg_path):
         pkg_name = os.path.basename(pkg_path)
@@ -21,6 +28,9 @@ class RepoManager:
             capture_output=True
         )
 
+    def get_package_files(self):
+        return glob.glob(os.path.join(self.repo_dir, "*.pkg.tar.zst"))
+
     def get_pacman_conf_fragment(self):
         return f"""
 [{self.db_name}]
@@ -31,10 +41,6 @@ Server = file://{self.repo_dir}
     def generate_custom_conf(self, base_conf="/etc/pacman.conf", output_path="pacman.conf"):
         with open(base_conf, 'r') as f:
             lines = f.readlines()
-        
-        # We need to find where [options] section is to add our repo?
-        # Actually, adding it at the end is fine, but we should make sure
-        # our repo has higher priority if needed.
         
         with open(output_path, 'w') as f:
             for line in lines:

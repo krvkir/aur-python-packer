@@ -1,7 +1,8 @@
-import os
-import subprocess
 import glob
+import os
 import shutil
+import subprocess
+
 
 class Builder:
     def __init__(self, local_only=False):
@@ -27,45 +28,54 @@ class Builder:
 
         return None
 
-    def build(self, pkgname, directory, nocheck=False, custom_conf=None):
+    def build(self, pkgname, directory, deps=None, nocheck=False, custom_conf=None):
         directory = os.path.abspath(directory)
 
         if self.local_only:
             return self.execute_local_build(pkgname, directory, nocheck, custom_conf)
-        
+
         chroot_tool = self.check_chroot_tools()
         if chroot_tool:
-            return self.execute_chroot_build(chroot_tool, pkgname, directory, nocheck, custom_conf)
-        
+            print(f"Using build tool: {chroot_tool}")
+            return self.execute_chroot_build(
+                chroot_tool, pkgname, directory, deps, nocheck, custom_conf
+            )
+
         raise RuntimeError(
             f"Chroot build tools not found for OS type '{self.os_type}'. "
             "Install 'devtools' (Arch) or 'manjaro-tools-pkg' (Manjaro), "
             "or use --local to build on the host system."
         )
 
-    def execute_chroot_build(self, tool, pkgname, directory, nocheck, custom_conf):
-        cmd = [tool]
+    def execute_chroot_build(
+        self, tool, pkgname, directory, deps, nocheck, custom_conf
+    ):
+        cmd = ["sudo", tool]
         if tool in ["chrootbuild", "buildpkg"]:
             cmd.extend(["-p", pkgname])
-        
+            if deps:
+                for dep in deps:
+                    cmd.extend(["-i", dep])
+
         # TODO: Handle custom_conf for chroot tools if needed
+        print(f"Build dir is {directory}.")
         subprocess.run(cmd, cwd=directory, check=True)
         return self._find_package_file(directory)
 
     def execute_local_build(self, pkgname, directory, nocheck, custom_conf):
-        cmd = ['makepkg', '-s', '-f', '--noconfirm', '--skippgpcheck']
+        cmd = ["makepkg", "-s", "-f", "--noconfirm", "--skippgpcheck"]
         if nocheck:
-            cmd.append('--nocheck')
+            cmd.append("--nocheck")
 
         env = os.environ.copy()
         if custom_conf:
             wrapper_dir = os.path.join(os.path.dirname(custom_conf), "bin")
             os.makedirs(wrapper_dir, exist_ok=True)
             wrapper_path = os.path.join(wrapper_dir, "pacman")
-            with open(wrapper_path, 'w') as f:
+            with open(wrapper_path, "w") as f:
                 f.write(f'#!/bin/bash\n/usr/bin/pacman --config "{custom_conf}" "$@"\n')
             os.chmod(wrapper_path, 0o755)
-            env['PATH'] = wrapper_dir + os.pathsep + env['PATH']
+            env["PATH"] = wrapper_dir + os.pathsep + env["PATH"]
 
         subprocess.run(cmd, cwd=directory, check=True, env=env)
         return self._find_package_file(directory)
@@ -73,5 +83,7 @@ class Builder:
     def _find_package_file(self, directory):
         pkg_files = glob.glob(os.path.join(directory, "*.pkg.tar.zst"))
         if not pkg_files:
-            raise FileNotFoundError(f"Build finished but no package file found in {directory}")
+            raise FileNotFoundError(
+                f"Build finished but no package file found in {directory}"
+            )
         return max(pkg_files, key=os.path.getmtime)

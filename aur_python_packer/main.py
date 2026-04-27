@@ -1,4 +1,5 @@
 import os
+import subprocess
 
 from aur_python_packer.builder import Builder
 from aur_python_packer.generator import PyPIGenerator, generate_srcinfo
@@ -37,7 +38,7 @@ class Manager:
 
             # Check if already built in this run or previous
             current_state = self.state.get_package(pkg)
-            if current_state and current_state["status"] == "success":
+            if current_state and current_state.get("status") == "success":
                 print(f"Package {pkg} already built, skipping.")
                 continue
 
@@ -70,8 +71,36 @@ class Manager:
                         output_path=self.pacman_conf_path
                     )
 
+                    # Sync local repo to allow pacman to find freshly built dependencies
+                    try:
+                        # If we have a local repo db, we should sync it
+                        # But if we are not root, we might not be able to sync the system db
+                        # Try to sync, but don't fail hard if it's just a permission error
+                        # unless we are in local mode where we really need it.
+                        sync_cmd = ["sudo", "pacman", "-Sy", "--config", custom_conf]
+                        subprocess.run(
+                            sync_cmd, check=True, capture_output=True, text=True
+                        )
+                    except subprocess.CalledProcessError as e:
+                        if (
+                            "permission denied" in e.stderr.lower()
+                            or "sudo" in e.stderr.lower()
+                            or "unless you are root" in e.stderr.lower()
+                        ):
+                            print(
+                                f"Warning: Could not sync pacman database: {e.stderr.strip()}"
+                            )
+                            if self.builder.local_only:
+                                print("Proceeding without sync for local build...")
+                        elif "localrepo.db" not in e.stderr:
+                            print(f"Error syncing pacman: {e.stderr}")
+                            raise
                     pkg_file = self.builder.build(
-                        pkg, pkg_dir, nocheck=nocheck, custom_conf=custom_conf
+                        pkg,
+                        os.path.dirname(pkg_dir),
+                        deps=self.repo.get_package_files(),
+                        nocheck=nocheck,
+                        custom_conf=custom_conf,
                     )
                     self.repo.add_package(pkg_file)
                     self.state.update_package(pkg, "built", "success")
