@@ -18,7 +18,7 @@ class Builder:
     def _check_dependencies(self):
         if not shutil.which("bwrap"):
             raise RuntimeError("bubblewrap (bwrap) is required for rootless builds.")
-        
+
         # Check for unprivileged user namespace support
         try:
             subprocess.run(["unshare", "--user", "true"], check=True, capture_output=True)
@@ -37,7 +37,7 @@ class Builder:
         logger.info(f"Bootstrapping minimal root at {self.root_dir} (this may take a while)...")
         os.makedirs(self.root_dir, exist_ok=True)
         os.makedirs(os.path.join(self.root_dir, "var/lib/pacman"), exist_ok=True)
-        
+
         # Copy host's pacman.conf to root to ensure same repositories are available
         # Actually, Manager.build_all uses custom_conf which is based on host's conf.
         # But for other tools in the sandbox, having a good /etc/pacman.conf is helpful.
@@ -74,13 +74,13 @@ class Builder:
         os.makedirs(self.bin_dir, exist_ok=True)
         sudo_shim_path = os.path.join(self.bin_dir, "sudo")
         pacman_shim_path = os.path.join(self.bin_dir, "pacman")
-        
+
         # Create a persistent passwd/group in work dir that contains alpm and the user
         etc_dir = os.path.join(self.work_dir, "etc")
         os.makedirs(etc_dir, exist_ok=True)
         passwd_path = os.path.join(etc_dir, "passwd")
         group_path = os.path.join(etc_dir, "group")
-        
+
         uid = os.getuid()
         gid = os.getgid()
         username = os.getlogin()
@@ -90,7 +90,7 @@ class Builder:
             f.write("alpm:x:973:973:Arch Linux Package Management:/:/usr/bin/nologin\n")
             f.write("nobody:x:65534:65534:Nobody:/:/usr/bin/nologin\n")
             f.write(f"{username}:x:{uid}:{gid}::/home/{username}:/usr/bin/bash\n")
-            
+
         with open(group_path, "w") as f:
             f.write("root:x:0:root\n")
             f.write("alpm:x:973:\n")
@@ -99,7 +99,7 @@ class Builder:
 
         # Sandbox command for pacman (run as root)
         # We use fakeroot to trick pacman into thinking it's root.
-        # Since we are already in a user namespace and the files are owned by us, 
+        # Since we are already in a user namespace and the files are owned by us,
         # this is enough to perform operations on the local DB and root.
         pacman_base = f'fakeroot /usr/bin/pacman --config "{custom_conf}" --dbpath "{pacman_db_path}"'
 
@@ -117,7 +117,7 @@ class Builder:
             f.write('done\n')
             f.write('if [ "$1" = "--" ]; then shift; fi\n')
             f.write('exec "$@"\n')
-        
+
         # Pacman shim: ensures non-sudo pacman calls (like makepkg's pacman -T) also use the custom DB.
         with open(pacman_shim_path, "w") as f:
             f.write("#!/bin/sh\n")
@@ -132,12 +132,12 @@ class Builder:
         etc_dir = os.path.join(self.work_dir, "etc")
         passwd_path = os.path.join(etc_dir, "passwd")
         group_path = os.path.join(etc_dir, "group")
-        
+
         # Get current user IDs
         uid = os.getuid()
         gid = os.getgid()
         username = os.getlogin()
-        
+
         # Ensure home directory exists in work dir
         home_dir = os.path.join(self.work_dir, "home", username)
         os.makedirs(home_dir, exist_ok=True)
@@ -175,7 +175,7 @@ class Builder:
             "--setenv", "MAKEFLAGS", f"-j{nproc}",
             "--chdir", cwd
         ]
-        
+
         # Also bind-mount the directory being built if it's outside work_dir
         if not cwd.startswith(self.work_dir):
              bwrap_cmd.extend(["--bind", cwd, cwd])
@@ -188,7 +188,7 @@ class Builder:
 
     def build(self, pkgname, directory, deps=None, nocheck=False, custom_conf=None, pacman_db_path=None):
         directory = os.path.abspath(directory)
-        
+
         if not custom_conf:
             raise ValueError("custom_conf is required for rootless builds")
 
@@ -206,7 +206,7 @@ class Builder:
         # Ensure the build user can write to the directory
         # In the sandbox we are root (uid 0), and we mapped our current user to uid 0.
         # So we should have permission.
-        
+
         # For first-time builds, makepkg -s might fail if repos are not synced.
         # We rely on Manager having done the sync, but inside the sandbox
         # we might need to ensure the DBPath is reachable.
