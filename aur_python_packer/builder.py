@@ -128,7 +128,7 @@ class Builder:
         return sudo_shim_path
 
 
-    def _run_in_sandbox(self, cmd, cwd, custom_conf, pacman_db_path):
+    def _run_in_sandbox(self, cmd, cwd, custom_conf, pacman_db_path, log_level=logging.DEBUG):
         etc_dir = os.path.join(self.work_dir, "etc")
         passwd_path = os.path.join(etc_dir, "passwd")
         group_path = os.path.join(etc_dir, "group")
@@ -184,7 +184,7 @@ class Builder:
         logger.debug(f"Sandbox PATH: {self.bin_dir}:/usr/bin")
         bwrap_cmd.extend(cmd)
 
-        run_command(bwrap_cmd)
+        run_command(bwrap_cmd, log_level=log_level)
 
     def build(self, pkgname, directory, deps=None, nocheck=False, custom_conf=None, pacman_db_path=None):
         directory = os.path.abspath(directory)

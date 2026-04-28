@@ -1,6 +1,7 @@
 import os
 import logging
 import subprocess
+import shlex
 
 from aur_python_packer.builder import Builder
 from aur_python_packer.generator import PyPIGenerator, generate_srcinfo
@@ -114,3 +115,39 @@ class Manager:
                     logger.error(f"Failed to build {pkg}: {e}")
                     self.state.update_package(pkg, "failed", "error")
                     break
+
+    def run_in_sandbox(self, command, cwd=None, log_level=logging.INFO):
+        """Execute a command inside the chrooted sandbox environment."""
+        if cwd is None:
+            cwd = self.work_dir
+
+        custom_conf = self.repo.generate_custom_conf(
+            output_path=self.pacman_conf_path
+        )
+        self.builder._bootstrap_root(custom_conf, self.pacman_db_path)
+
+        # Sync local repo to allow pacman to find packages
+        sync_cmd = [
+            "bwrap", "--unshare-user", "--uid", "0", "--gid", "0",
+            "--bind", "/", "/",
+            "--bind", self.work_dir, self.work_dir,
+            "pacman", "-Sy", "--config", custom_conf, "--dbpath", self.pacman_db_path
+        ]
+        try:
+            run_command(sync_cmd, log_level=logging.DEBUG)
+        except subprocess.CalledProcessError as e:
+            logger.warning(f"Could not sync pacman database (non-fatal): {e.output.strip()}")
+
+        if isinstance(command, str):
+            cmd_list = shlex.split(command)
+        else:
+            cmd_list = command
+
+        logger.info(f"Executing in sandbox: {' '.join(cmd_list)}")
+        self.builder._run_in_sandbox(
+            cmd_list,
+            cwd=os.path.abspath(cwd),
+            custom_conf=custom_conf,
+            pacman_db_path=self.pacman_db_path,
+            log_level=log_level
+        )

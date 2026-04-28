@@ -1,20 +1,25 @@
 import click
 import json
+import os
 from aur_python_packer.main import Manager
 from aur_python_packer.logger import setup_logging
 
 @click.group()
-def cli():
+@click.option('--work-dir', '-w', default='work', type=click.Path(file_okay=False), help="Base directory for all tool state and artifacts.")
+@click.pass_context
+def cli(ctx, work_dir):
     """AUR Python Packer - Automate AUR package builds."""
-    pass
+    ctx.ensure_object(dict)
+    ctx.obj['work_dir'] = work_dir
 
 @cli.command()
-@click.argument('workdir', type=click.Path(file_okay=False))
 @click.argument('pkgname')
 @click.option('--path', '-P', multiple=True, help="Search paths for local PKGBUILDs")
 @click.option('--nocheck', is_flag=True, help="Skip package checks (tests)")
-def build(workdir, pkgname, path, nocheck):
+@click.pass_context
+def build(ctx, pkgname, path, nocheck):
     """Build a package and its dependencies."""
+    workdir = ctx.obj['work_dir']
     log_path = setup_logging(workdir)
     print(f"Logging to: {log_path}")
 
@@ -25,11 +30,12 @@ def build(workdir, pkgname, path, nocheck):
     mgr.build_all(pkgname, nocheck=nocheck)
 
 @cli.command()
-@click.argument('workdir', type=click.Path(file_okay=False))
 @click.argument('pkgname')
 @click.option('--path', '-P', multiple=True, help="Search paths for local PKGBUILDs")
-def resolve(workdir, pkgname, path):
+@click.pass_context
+def resolve(ctx, pkgname, path):
     """Resolve dependencies for a package and print details."""
+    workdir = ctx.obj['work_dir']
     setup_logging(workdir)
     
     mgr = Manager(work_dir=workdir)
@@ -59,6 +65,19 @@ def resolve(workdir, pkgname, path):
         extra = {k: v for k, v in node.items() if k not in ['tier', 'version']}
         if extra:
             print(f"  Metadata: {json.dumps(extra)}")
+
+@cli.command()
+@click.argument('command')
+@click.option('--cwd', help="Working directory inside the sandbox")
+@click.pass_context
+def cmd(ctx, command, cwd):
+    """Execute a command inside the chrooted environment."""
+    workdir = ctx.obj['work_dir']
+    log_path = setup_logging(workdir)
+    print(f"Logging to: {log_path}")
+
+    mgr = Manager(work_dir=workdir)
+    mgr.run_in_sandbox(command, cwd=cwd or workdir)
 
 def main():
     cli()
