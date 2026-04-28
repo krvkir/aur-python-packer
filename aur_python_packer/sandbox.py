@@ -102,6 +102,7 @@ class Sandbox:
         but modify files in the work_dir/sandbox without root privileges.
         """
         # fmt: off
+        os.makedirs(self.root_dir, exist_ok=True)
         bwrap_cmd = [
             "bwrap",
             "--unshare-user",
