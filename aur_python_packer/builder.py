@@ -68,7 +68,7 @@ class Builder:
         cmd = [
             "pacman", "-Sy",
             "base-devel", "pacman", "python", "git", "bash", "fakeroot",
-            "ca-certificates", "ca-certificates-utils",
+            "ca-certificates", "ca-certificates-utils", "pacman-contrib",
             "--noconfirm", "--needed",
             "--root", self.root_dir,
             "--config", "/etc/pacman.conf",
