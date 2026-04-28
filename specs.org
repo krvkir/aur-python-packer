@@ -1,12 +1,4 @@
-Here is the Archlinux AUR package for JupyterAI software, with all its dependencies which are missing in AUR.
-
-The goal is to upload them to AUR so that any arch/manjaro user could install jupyter-ai.
-
-The packaging is not finished. Most of PKGBUILDs are created and produce packages, but the whole setup was not tested in a clean environment. Also, the packages were made a month ago, so the versions of many libraries that are specified in PKGBUILDs are slightly obsolete.
-
-There was an attempt to make a bash script which tests each package in a clean env, with all the dependencies it requires. The difficulty is that many of those packages depend on AUR packages, and there's no easy way to fulfill those dependencies. And the list of dependencies is indivifual for each package.
-
-I want to make a fresh attempt on creating the testing/building script.
+#+TITLE: AUR Python Package Builder
 
 * Requirements Draft
 ** Objectives

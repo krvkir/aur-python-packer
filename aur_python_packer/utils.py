@@ -45,7 +45,7 @@ def run_command(cmd, cwd=None, env=None, check=True, log_level=logging.DEBUG):
     return_code = process.wait()
 
     if check and return_code != 0:
-        last_output = "\n".join(output_lines[-5:])
+        last_output = "\n".join(output_lines[-20:])
         error_msg = (
             f"Command '{' '.join(cmd)}' failed with exit code {return_code}.\n"
             f"Last output:\n{last_output}"
