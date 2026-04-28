@@ -53,6 +53,7 @@ class PyPIGenerator:
             "summary": info["summary"],
             "home_page": info.get("home_page") or info.get("project_url"),
             "license": info.get("license") or "None",
+            "classifiers": info.get("classifiers") or [],
             "requires_dist": info.get("requires_dist") or [],
         }
 
@@ -74,6 +75,22 @@ class PyPIGenerator:
     def render(self, meta):
         return self.template.render(**meta)
 
+    def normalize_license(self, meta):
+        # Try to find license in classifiers first
+        for c in meta["classifiers"]:
+            if c.startswith("License :: OSI Approved :: "):
+                l = c.split(" :: ")[-1]
+                if "BSD License" in l: return "BSD-3-Clause"
+                if "MIT License" in l: return "MIT"
+                if "Apache Software License" in l: return "Apache-2.0"
+
+        # Fallback to license field with some heuristics
+        l = meta["license"]
+        if len(l) > 100 or "\n" in l:
+             if "BSD" in l: return "BSD-3-Clause"
+             return "custom"
+        return l
+
     def generate(self, pyname, output_dir, depends=None):
         meta = self.fetch_meta(pyname)
         release_info = self.get_release_info(pyname, meta["version"])
@@ -83,13 +100,15 @@ class PyPIGenerator:
         if any("hatchling" in str(d).lower() for d in meta["requires_dist"]):
              makedepends.append('python-hatchling')
 
+        norm_license = self.normalize_license(meta)
+
         pkg_data = {
             "pkgname": f"python-{pyname.lower()}",
             "pyname": pyname,
             "pkgver": meta["version"],
             "pkgdesc": meta["summary"],
             "url": meta["home_page"],
-            "license": meta["license"],
+            "license": norm_license,
             "sha256": release_info["sha256"] if release_info else "",
             "source_url": release_info["url"] if release_info else "",
             "depends": depends or [],
