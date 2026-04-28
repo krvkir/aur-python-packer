@@ -62,13 +62,8 @@ class Builder:
             "--proc", "/proc",
             "--bind", self.work_dir, self.work_dir,
             "pacman", "-Sy",
-            "base-devel", "pacman", "python", "git", "bubblewrap", "util-linux", "bash", "curl", "fakeroot",
+            "base-devel", "pacman", "python", "git", "bash", "fakeroot",
             "ca-certificates", "ca-certificates-utils",
-            "python-build", "python-installer", "python-setuptools", "python-wheel",
-            "python-hatchling", "python-flit-core", "python-poetry-core", "python-setuptools-scm",
-            "python-editables", "python-pathspec", "python-pluggy", "python-trove-classifiers",
-            "python-dunamai", "python-pydantic", "python-pydantic-core", "python-anyio",
-            "python-starlette", "python-httpx", "python-rich", "python-typing_extensions",
             "--noconfirm", "--needed",
             "--root", self.root_dir,
             "--config", "/etc/pacman.conf",
@@ -137,7 +132,14 @@ class Builder:
         return sudo_shim_path
 
     def _run_in_sandbox(
-        self, cmd, cwd, custom_conf, pacman_db_path, log_level=logging.DEBUG, check=True
+        self,
+        cmd,
+        cwd,
+        custom_conf,
+        pacman_db_path,
+        log_level=logging.DEBUG,
+        check=True,
+        share_net=False,
     ):
         etc_dir = os.path.join(self.work_dir, "etc")
         passwd_path = os.path.join(etc_dir, "passwd")
@@ -188,6 +190,9 @@ class Builder:
         ]
         # fmt: on
 
+        if share_net:
+            bwrap_cmd.append("--share-net")
+
         # Also bind-mount the directory being built if it's outside work_dir
         if not cwd.startswith(self.work_dir):
             bwrap_cmd.extend(["--bind", cwd, cwd])
@@ -196,7 +201,7 @@ class Builder:
         logger.debug(f"Sandbox PATH: {self.bin_dir}:/usr/bin")
         bwrap_cmd.extend(cmd)
 
-        run_command(bwrap_cmd, log_level=log_level, check=check)
+        return run_command(bwrap_cmd, log_level=log_level, check=check)
 
     def build(
         self,
@@ -248,3 +253,10 @@ class Builder:
                 f"Build finished but no package file found in {directory}"
             )
         return max(pkg_files, key=os.path.getmtime)
+
+    def execute_sandboxed_build_info(self, directory, custom_conf, pacman_db_path):
+        cmd = ["makepkg", "--printsrcinfo"]
+        result = self._run_in_sandbox(
+            cmd, cwd=directory, custom_conf=custom_conf, pacman_db_path=pacman_db_path
+        )
+        return result.stdout

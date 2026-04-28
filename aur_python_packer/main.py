@@ -4,7 +4,7 @@ import shlex
 import subprocess
 
 from aur_python_packer.builder import Builder
-from aur_python_packer.generator import PyPIGenerator, generate_srcinfo
+from aur_python_packer.generator import PyPIGenerator
 from aur_python_packer.repo import RepoManager
 from aur_python_packer.resolver import DependencyResolver, clone_aur_repo
 from aur_python_packer.state import StateManager
@@ -78,7 +78,16 @@ class Manager:
                 if not os.path.exists(os.path.join(pkg_dir, "PKGBUILD")):
                     depends = list(self.resolver.graph.successors(pkg))
                     self.generator.generate(pyname, pkg_dir, depends=depends)
-                    generate_srcinfo(pkg_dir)
+                    # Use sandbox to run updpkgsums and makepkg --printsrcinfo
+                    # updpkgsums needs network to download the source
+                    self.run_in_sandbox("updpkgsums", cwd=pkg_dir, share_net=True)
+                    
+                    # Generate .SRCINFO
+                    result = self.builder.execute_sandboxed_build_info(
+                        pkg_dir, self.pacman_conf_path, self.pacman_db_path
+                    )
+                    with open(os.path.join(pkg_dir, ".SRCINFO"), "w") as f:
+                        f.write(result)
 
             if pkg_dir:
                 try:
@@ -121,7 +130,9 @@ class Manager:
                     self.state.update_package(pkg, "failed", "error")
                     break
 
-    def run_in_sandbox(self, command, cwd=None, log_level=logging.INFO, check=True):
+    def run_in_sandbox(
+        self, command, cwd=None, log_level=logging.INFO, check=True, share_net=False
+    ):
         """Execute a command inside the chrooted sandbox environment."""
         if cwd is None:
             cwd = self.work_dir
@@ -158,4 +169,5 @@ class Manager:
             pacman_db_path=self.pacman_db_path,
             log_level=log_level,
             check=check,
+            share_net=share_net,
         )

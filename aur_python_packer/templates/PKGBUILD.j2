@@ -1,0 +1,22 @@
+pkgname={{ pkgname }}
+_name={{ pyname }}
+pkgver={{ pkgver }}
+pkgrel=1
+pkgdesc="{{ pkgdesc }}"
+arch=('any')
+url="{{ url }}"
+license=('{{ license }}')
+depends=({% for dep in depends %}'{{ dep }}' {% endfor %})
+makedepends=({% for dep in makedepends %}'{{ dep }}' {% endfor %})
+source=("{{ source_url }}")
+sha256sums=('{{ sha256 }}')
+
+build() {
+    cd "$srcdir"/*-"$pkgver"
+    python -m build --wheel --no-isolation
+}
+
+package() {
+    cd "$srcdir"/*-"$pkgver"
+    python -m installer --destdir="$pkgdir" dist/*.whl
+}

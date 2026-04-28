@@ -40,6 +40,7 @@ The system SHALL capture and interleave the standard output and standard error s
 
 ## Implementation Notes
 - Logs are stored in the `logs/` directory.
++ Logs are stored in the `logs/` directory within the configured workspace.
 - Log files follow the `run_YYYYMMDD_HHMMSS.log` format.
 - Uses `DEBUG` level for file logs and `INFO` level for terminal.
 - Captures `subprocess` metadata (commands, CWD, env).

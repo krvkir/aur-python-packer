@@ -3,7 +3,7 @@ import os
 from datetime import datetime
 
 class StateManager:
-    def __init__(self, state_file="build_state.json"):
+    def __init__(self, state_file="build_index.json"):
         self.state_file = state_file
         self.state = self._load()
 

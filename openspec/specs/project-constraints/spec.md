@@ -12,6 +12,9 @@ The project SHALL follow a consistent directory structure for source code, tests
 - **GIVEN** the project repository
 - **WHEN** inspecting the root directory
 - **THEN** the primary configuration, source directory, and test directory MUST be present in standardized locations
++ **THEN** `pyproject.toml` SHALL be at the root
++ **AND** `aur_python_packer/` directory SHALL be at the root
++ **AND** `tests/` directory SHALL be at the root
 
 ### Requirement: Formal Dependency Management
 The project SHALL use Poetry for managing its own development and runtime dependencies.
@@ -34,3 +37,4 @@ The project's primary software package SHALL be named `aur_python_packer`.
 - Configuration is in `pyproject.toml`.
 - Package name is `aur_python_packer`.
 - Source code is in `src/`, tests in `tests/`.
++ Source code is in `aur_python_packer/`, tests in `tests/`.

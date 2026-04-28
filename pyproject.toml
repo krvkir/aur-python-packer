@@ -5,6 +5,7 @@ description = "Automated AUR Package Lifecycle Manager"
 authors = ["krvkir"]
 readme = "specs.org"
 packages = [{include = "aur_python_packer"}]
+include = ["aur_python_packer/templates/*.j2"]
 
 [tool.poetry.dependencies]
 python = "^3.14"

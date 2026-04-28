@@ -22,7 +22,16 @@ The system SHALL configure build environments to trust and utilize the local rep
 - **WHEN** configuring the package manager
 - **THEN** the system SHALL add the local repository as a trusted source
 
+### Requirement: Modern Package Manager Compatibility
+The system SHALL ensure the local repository and the package manager configuration are compatible with modern `pacman` versions (7.1+) when running in isolated environments.
+
+#### Scenario: Running with modern pacman
+- **GIVEN** a build environment with `pacman` 7.1+
+- **WHEN** initializing the configuration
+- **THEN** the system SHALL apply necessary overrides (e.g., `DownloadUser`, `XferCommand`) to ensure network operations and database synchronization work correctly in rootless isolation.
+
 ## Implementation Notes
 - Uses `repo-add` to manage the repository database.
 - Modifies `pacman.conf` in the build environment.
 - Sets `SigLevel = Optional TrustAll` for the local repository.
+- Applies `DownloadUser = root` and custom `XferCommand` overrides for Pacman 7.1 compatibility.

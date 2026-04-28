@@ -41,6 +41,7 @@ The system SHALL verify the success of the build process and maintain a record o
 ## Implementation Notes
 - Uses `bwrap` (Bubblewrap) for rootless isolation.
 - Maps current user to `uid 0` and `gid 0` within the container.
++ Maps current user to their actual host UID/GID within the container (to satisfy `makepkg`).
 - Build root is stored in `work/root`.
 - Bootstrapping is performed using `pacman --root` to install `base-devel`.
 - A `sudo` shim is used to intercept calls and run them as the sandboxed root user.

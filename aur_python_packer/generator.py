@@ -1,44 +1,17 @@
-import hashlib
 import logging
 import os
-import subprocess
-
 import requests
-from jinja2 import Template
-
-from aur_python_packer.utils import run_command
+from jinja2 import Environment, PackageLoader, select_autoescape
 
 logger = logging.getLogger(__name__)
 
-PKGBUILD_TEMPLATE = """
-pkgname={{ pkgname }}
-_name={{ pyname }}
-pkgver={{ pkgver }}
-pkgrel=1
-pkgdesc="{{ pkgdesc }}"
-arch=('any')
-url="{{ url }}"
-license=('{{ license }}')
-depends=({% for dep in depends %}'{{ dep }}' {% endfor %})
-makedepends=({% for dep in makedepends %}'{{ dep }}' {% endfor %})
-source=("{{ source_url }}")
-sha256sums=('{{ sha256 }}')
-
-build() {
-    cd "$srcdir"/*-"$pkgver"
-    python -m build --wheel --no-isolation
-}
-
-package() {
-    cd "$srcdir"/*-"$pkgver"
-    python -m installer --destdir="$pkgdir" dist/*.whl
-}
-"""
-
-
 class PyPIGenerator:
     def __init__(self):
-        self.template = Template(PKGBUILD_TEMPLATE)
+        self.env = Environment(
+            loader=PackageLoader("aur_python_packer", "templates"),
+            autoescape=select_autoescape()
+        )
+        self.template = self.env.get_template("PKGBUILD.j2")
 
     def fetch_meta(self, pyname):
         logger.debug(f"Fetching PyPI metadata for {pyname}")
@@ -67,7 +40,6 @@ class PyPIGenerator:
         for release in data["urls"]:
             if release["packagetype"] == "sdist":
                 return {
-                    "sha256": release["digests"]["sha256"],
                     "url": release["url"]
                 }
         return None
@@ -109,7 +81,7 @@ class PyPIGenerator:
             "pkgdesc": meta["summary"],
             "url": meta["home_page"],
             "license": norm_license,
-            "sha256": release_info["sha256"] if release_info else "",
+            "sha256": "SKIP", # Will be updated by updpkgsums
             "source_url": release_info["url"] if release_info else "",
             "depends": depends or [],
             "makedepends": makedepends,
@@ -122,15 +94,3 @@ class PyPIGenerator:
             f.write(self.render(pkg_data))
         return pkgbuild_path
 
-
-def generate_srcinfo(directory):
-    """Run makepkg --printsrcinfo and save to .SRCINFO."""
-    try:
-        logger.debug(f"Generating .SRCINFO in {directory}")
-        result = run_command(["makepkg", "--printsrcinfo"], cwd=directory)
-        with open(os.path.join(directory, ".SRCINFO"), "w") as f:
-            f.write(result.stdout)
-        return True
-    except subprocess.CalledProcessError:
-        logger.error(f"Failed to generate .SRCINFO in {directory}")
-        return False
