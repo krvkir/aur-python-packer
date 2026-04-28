@@ -1,5 +1,5 @@
-import os
 import logging
+import os
 import re
 import subprocess
 
@@ -7,9 +7,11 @@ import networkx as nx
 import requests
 from packaging.requirements import Requirement
 
+from aur_python_packer.generator import generate_srcinfo
 from aur_python_packer.utils import run_command
 
 logger = logging.getLogger(__name__)
+
 
 def parse_srcinfo(path):
     """Parse .SRCINFO and return pkgname and depends."""
@@ -101,7 +103,11 @@ class DependencyResolver:
                 pkgname=aur_meta.get("Name"),
             )
             # AUR RPC returns Depends, MakeDepends, and CheckDepends
-            deps = aur_meta.get("Depends", []) + aur_meta.get("MakeDepends", []) + aur_meta.get("CheckDepends", [])
+            deps = (
+                aur_meta.get("Depends", [])
+                + aur_meta.get("MakeDepends", [])
+                + aur_meta.get("CheckDepends", [])
+            )
             for dep in deps:
                 # Strip version constraints
                 dep_name = re.split("[<>=]", dep)[0]
@@ -143,16 +149,29 @@ class DependencyResolver:
         for base in self.search_paths:
             pkg_path = os.path.join(base, pkgname)
             if os.path.isdir(pkg_path):
-                srcinfo_path = os.path.join(pkg_path, ".SRCINFO")
-                if os.path.exists(srcinfo_path):
-                    meta = parse_srcinfo(srcinfo_path)
-                    meta["path"] = pkg_path
-                    return meta
                 pkgbuild_path = os.path.join(pkg_path, "PKGBUILD")
                 if os.path.exists(pkgbuild_path):
+                    srcinfo_path = os.path.join(pkg_path, ".SRCINFO")
+                    # Check if .SRCINFO needs regeneration
+                    if not os.path.exists(srcinfo_path) or os.path.getmtime(
+                        pkgbuild_path
+                    ) > os.path.getmtime(srcinfo_path):
+                        logger.debug(
+                            f".SRCINFO is missing or stale for {pkgname}, (re)generating..."
+                        )
+                        generate_srcinfo(pkg_path)
+
+                    if os.path.exists(srcinfo_path):
+                        meta = parse_srcinfo(srcinfo_path)
+                        if meta:
+                            meta["path"] = pkg_path
+                            return meta
+
+                    # Fallback to PKGBUILD parsing
                     meta = parse_pkgbuild(pkgbuild_path)
-                    meta["path"] = pkg_path
-                    return meta
+                    if meta:
+                        meta["path"] = pkg_path
+                        return meta
         return None
 
 
@@ -176,7 +195,7 @@ def parse_pypi_dependency(req_str):
     # Skip extra dependencies (e.g. [test], [doc]) for now
     if req.marker:
         # This is a very basic marker check. If it contains 'extra ==', skip it.
-        if 'extra ==' in str(req.marker):
+        if "extra ==" in str(req.marker):
             return None
     return normalize_pypi_name(req.name)
 
@@ -215,6 +234,7 @@ def pypi_verify_existence(pyname):
         return resp.status_code == 200
     except Exception:
         return False
+
 
 def get_aur_info(pkgname):
     """Fetch package info from AUR RPC."""

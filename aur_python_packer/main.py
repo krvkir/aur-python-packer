@@ -73,9 +73,10 @@ class Manager:
             elif tier == "pypi":
                 pyname = node_data.get("pyname") or pkg.replace("python-", "")
                 pkg_dir = os.path.join(self.generated_dir, pkg)
-                depends = list(self.resolver.graph.successors(pkg))
-                self.generator.generate(pyname, pkg_dir, depends=depends)
-                generate_srcinfo(pkg_dir)
+                if not os.path.exists(os.path.join(pkg_dir, "PKGBUILD")):
+                    depends = list(self.resolver.graph.successors(pkg))
+                    self.generator.generate(pyname, pkg_dir, depends=depends)
+                    generate_srcinfo(pkg_dir)
 
             if pkg_dir:
                 try:

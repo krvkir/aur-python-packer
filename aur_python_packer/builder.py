@@ -106,14 +106,12 @@ class Builder:
         # Sudo shim: robustly finds 'pacman' in arguments and injects bwrap.
         with open(sudo_shim_path, "w") as f:
             f.write("#!/bin/sh\n")
-            f.write('echo "Sudo shim called with: $@" >> /warehouse/krvkir/repos/archlinux/aur-python-packer/work/shim_log.txt\n')
             f.write('for arg in "$@"; do\n')
             f.write('    case "$arg" in\n')
             f.write('        pacman|*/pacman)\n')
             f.write('            while [ "$1" != "$arg" ]; do shift; done\n')
             f.write('            shift\n')
-            f.write(f'            echo "Executing: {pacman_base} $@" >> /warehouse/krvkir/repos/archlinux/aur-python-packer/work/shim_log.txt\n')
-            f.write(f'            exec {pacman_base} "$@" >> /warehouse/krvkir/repos/archlinux/aur-python-packer/work/shim_log.txt 2>&1\n')
+            f.write(f'            exec {pacman_base} "$@"\n')
             f.write('            ;;\n')
             f.write('    esac\n')
             f.write('done\n')
@@ -123,7 +121,6 @@ class Builder:
         # Pacman shim: ensures non-sudo pacman calls (like makepkg's pacman -T) also use the custom DB.
         with open(pacman_shim_path, "w") as f:
             f.write("#!/bin/sh\n")
-            f.write('echo "Pacman shim called with: $@" >> /warehouse/krvkir/repos/archlinux/aur-python-packer/work/shim_log.txt\n')
             f.write(f'exec /usr/bin/pacman --config "{custom_conf}" --dbpath "{pacman_db_path}" "$@"\n')
 
         os.chmod(sudo_shim_path, 0o755)

@@ -75,13 +75,19 @@ class PyPIGenerator:
         meta = self.fetch_meta(pyname)
         sha256 = self.get_sha256(pyname, meta["version"])
 
+        # Clean up license: take first line, remove common suffixes
+        license = meta["license"].split('\n')[0]
+        for suffix in [" License", " (BSD)"]:
+            if license.endswith(suffix):
+                license = license[:-len(suffix)]
+
         pkg_data = {
             "pkgname": f"python-{pyname.lower()}",
             "pyname": pyname,
             "pkgver": meta["version"],
             "pkgdesc": meta["summary"],
             "url": meta["home_page"],
-            "license": meta["license"],
+            "license": license,
             "sha256": sha256,
             "depends": depends or [],
         }
