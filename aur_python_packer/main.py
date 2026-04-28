@@ -7,14 +7,19 @@ from aur_python_packer.builder import Builder
 from aur_python_packer.generator import PyPIGenerator
 from aur_python_packer.graph_utils import print_dependency_graph
 from aur_python_packer.repo import RepoManager
-from aur_python_packer.resolver import DependencyResolver, clone_aur_repo
+from aur_python_packer.resolver import DependencyResolver
 from aur_python_packer.state import StateManager
 from aur_python_packer.utils import run_command
+from aur_python_packer.clients import AURClient
+from aur_python_packer.metadata import MetadataParser
 
 logger = logging.getLogger(__name__)
 
-
 class Manager:
+    """
+    The primary orchestrator for the AUR Python Packer.
+    Coordinates dependency resolution, package generation, and sandboxed building.
+    """
     def __init__(self, work_dir="work"):
         self.work_dir = os.path.abspath(work_dir)
         os.makedirs(self.work_dir, exist_ok=True)
@@ -41,8 +46,14 @@ class Manager:
         self.builder = Builder(work_dir=self.work_dir)
         self.resolver = DependencyResolver(self.work_dir)
         self.generator = PyPIGenerator()
+        self.aur_client = AURClient()
+        self.metadata_parser = MetadataParser()
 
     def build_all(self, target_pkg, nocheck=False):
+        """
+        Resolves and builds the specified target package and all its dependencies
+        in the correct order.
+        """
         logger.info(f"Resolving dependencies for {target_pkg}...")
         self.resolver.resolve(target_pkg)
         order = self.resolver.get_build_order()
@@ -71,7 +82,7 @@ class Manager:
             if tier == "local":
                 pkg_dir = node_data["path"]
             elif tier == "aur":
-                pkg_dir = clone_aur_repo(pkg, self.aur_cache_dir)
+                pkg_dir = self.aur_client.clone_repo(pkg, self.aur_cache_dir)
                 if not pkg_dir:
                     logger.error(f"Failed to clone AUR repo for {pkg}")
                     self.state.update_package(pkg, "failed", "clone_error")
@@ -87,11 +98,7 @@ class Manager:
                     self.run_in_sandbox("updpkgsums", cwd=pkg_dir, share_net=True)
                     
                     # Generate .SRCINFO
-                    result = self.builder.execute_sandboxed_build_info(
-                        pkg_dir, self.pacman_conf_path, self.pacman_db_path
-                    )
-                    with open(os.path.join(pkg_dir, ".SRCINFO"), "w") as f:
-                        f.write(result)
+                    self.metadata_parser.generate_srcinfo(pkg_dir)
 
             if pkg_dir:
                 try:
@@ -99,23 +106,8 @@ class Manager:
                     custom_conf = self.repo.generate_custom_conf(
                         output_path=self.pacman_conf_path
                     )
-
-                    # Sync local repo to allow pacman to find freshly built dependencies
-                    try:
-                        # Wrap in bwrap to allow fake root sync
-                        # fmt: off
-                        sync_cmd = [
-                            "bwrap", "--unshare-user", "--uid", "0", "--gid", "0",
-                            "--bind", "/", "/",
-                            "--bind", self.work_dir, self.work_dir,
-                            "pacman", "-Sy", "--config", custom_conf, "--dbpath", self.pacman_db_path
-                        ]
-                        # fmt: on
-                        run_command(sync_cmd, log_level=logging.DEBUG)
-                    except subprocess.CalledProcessError as e:
-                        logger.warning(
-                            f"Could not sync pacman database (non-fatal): {e.output.strip()}"
-                        )
+                    
+                    self._sync_pacman(custom_conf)
 
                     version = node_data.get("version", "unknown")
                     pkg_file = self.builder.build(
@@ -137,31 +129,25 @@ class Manager:
                     self.state.update_package(pkg, "failed", "error")
                     break
 
+    def _sync_pacman(self, custom_conf):
+        """Sync local repo to allow pacman to find packages."""
+        logger.debug("Syncing pacman databases inside the sandbox-friendly environment")
+        sync_cmd = ["pacman", "-Sy", "--config", custom_conf, "--dbpath", self.pacman_db_path]
+        self.builder.sandbox.run_host_command(sync_cmd)
+
     def run_in_sandbox(
         self, command, cwd=None, log_level=logging.INFO, check=True, share_net=False
     ):
-        """Execute a command inside the chrooted sandbox environment."""
+        """
+        Executes an arbitrary command inside the sandboxed build environment.
+        """
         if cwd is None:
             cwd = self.work_dir
 
         custom_conf = self.repo.generate_custom_conf(output_path=self.pacman_conf_path)
         self.builder._bootstrap_root(custom_conf, self.pacman_db_path)
-
-        # Sync local repo to allow pacman to find packages
-        # fmt: off
-        sync_cmd = [
-            "bwrap", "--unshare-user", "--uid", "0", "--gid", "0",
-            "--bind", "/", "/",
-            "--bind", self.work_dir, self.work_dir,
-            "pacman", "-Sy", "--config", custom_conf, "--dbpath", self.pacman_db_path
-        ]
-        # fmt: on
-        try:
-            run_command(sync_cmd, log_level=logging.DEBUG)
-        except subprocess.CalledProcessError as e:
-            logger.warning(
-                f"Could not sync pacman database (non-fatal): {e.output.strip()}"
-            )
+        
+        self._sync_pacman(custom_conf)
 
         if isinstance(command, str):
             cmd_list = shlex.split(command)

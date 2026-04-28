@@ -3,36 +3,46 @@ import logging
 import glob
 import shutil
 import subprocess
-
 from aur_python_packer.utils import run_command
+from aur_python_packer.config import PacmanConfig
 
 logger = logging.getLogger(__name__)
 
 class RepoManager:
+    """
+    Manages a local pacman repository of built packages.
+    """
     def __init__(self, repo_dir, db_name="localrepo", db_path_override=None, cache_path_override=None, log_path_override=None, gpg_dir_override=None):
+        """
+        Initializes the repository manager and ensures the local database is initialized.
+        """
         self.repo_dir = os.path.abspath(repo_dir)
         self.db_name = db_name
         self.db_path = os.path.join(self.repo_dir, f"{db_name}.db.tar.gz")
-        self.db_path_override = db_path_override
-        self.cache_path_override = cache_path_override
-        self.log_path_override = log_path_override
-        self.gpg_dir_override = gpg_dir_override
+        self.config_manager = PacmanConfig(
+            repo_dir=self.repo_dir,
+            db_name=db_name,
+            db_path_override=db_path_override,
+            cache_path_override=cache_path_override,
+            log_path_override=log_path_override,
+            gpg_dir_override=gpg_dir_override
+        )
 
         os.makedirs(self.repo_dir, exist_ok=True)
-        if self.db_path_override:
-            os.makedirs(self.db_path_override, exist_ok=True)
-        if self.cache_path_override:
-            os.makedirs(self.cache_path_override, exist_ok=True)
-        if self.log_path_override:
-            os.makedirs(os.path.dirname(self.log_path_override), exist_ok=True)
-        if self.gpg_dir_override:
-            os.makedirs(self.gpg_dir_override, exist_ok=True)
+        if db_path_override: os.makedirs(db_path_override, exist_ok=True)
+        if cache_path_override: os.makedirs(cache_path_override, exist_ok=True)
+        if log_path_override: os.makedirs(os.path.dirname(log_path_override), exist_ok=True)
+        if gpg_dir_override: os.makedirs(gpg_dir_override, exist_ok=True)
 
         if not os.path.exists(self.db_path):
             logger.info(f"Initializing local repository at {self.repo_dir}")
             run_command(['repo-add', self.db_path])
 
     def add_package(self, pkg_path):
+        """
+        Adds a built package (.pkg.tar.zst) to the local repository
+        and updates the repository database.
+        """
         pkg_name = os.path.basename(pkg_path)
         dest_path = os.path.join(self.repo_dir, pkg_name)
         logger.debug(f"Adding package {pkg_name} to local repository")
@@ -42,57 +52,13 @@ class RepoManager:
         run_command(['repo-add', self.db_path, dest_path])
 
     def get_package_files(self):
+        """
+        Returns a list of all package files present in the repository.
+        """
         return glob.glob(os.path.join(self.repo_dir, "*.pkg.tar.zst"))
 
-    def get_pacman_conf_fragment(self):
-        return f"""
-[{self.db_name}]
-SigLevel = Optional TrustAll
-Server = file://{self.repo_dir}
-"""
-
     def generate_custom_conf(self, base_conf="/etc/pacman.conf", output_path="pacman.conf"):
-        with open(base_conf, 'r') as f:
-            content = f.read()
-        
-        # Remove existing DBPath, CacheDir and SigLevel lines to override them
-        new_lines = []
-        for line in content.splitlines():
-            stripped = line.strip()
-            if (stripped.startswith("DBPath") or stripped.startswith("CacheDir") or 
-                stripped.startswith("SigLevel") or stripped.startswith("LocalFileSigLevel") or
-                stripped.startswith("XferCommand")):
-                continue
-            # Also remove [options] header, we will add it back at the top
-            if stripped == "[options]":
-                continue
-            new_lines.append(line)
-
-        # Re-insert our overrides under a fresh [options] header
-        overrides = ["[options]"]
-        overrides.append("SigLevel = Never")
-        overrides.append("LocalFileSigLevel = Never")
-        overrides.append('XferCommand = /usr/bin/curl -L -C - -f -o %o %u')
-        
-        # Pacman 7.1 introduces DownloadUser, which defaults to 'alpm'.
-        # In a sandbox where 'alpm' user might not exist or lacks permissions,
-        # using a custom XferCommand usually bypasses the internal download logic that triggers DownloadUser usage.
-        overrides.append('XferCommand = /usr/bin/curl -L -C - -f -o %o %u')
-
-        if self.db_path_override:
-            overrides.append(f"DBPath = {self.db_path_override}")
-        
-        if self.cache_path_override:
-            overrides.append(f"CacheDir = {self.cache_path_override}")
-
-        if self.log_path_override:
-            overrides.append(f"LogFile = {self.log_path_override}")
-
-        if self.gpg_dir_override:
-            overrides.append(f"GPGDir = {self.gpg_dir_override}")
-
-        with open(output_path, 'w') as f:
-            f.write("\n".join(overrides) + "\n")
-            f.write("\n".join(new_lines) + "\n")
-            f.write(self.get_pacman_conf_fragment())
-        return os.path.abspath(output_path)
+        """
+        Delegates custom pacman.conf generation to the configuration manager.
+        """
+        return self.config_manager.generate(base_conf, output_path)

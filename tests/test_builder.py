@@ -23,7 +23,7 @@ def test_builder_init(mock_builder_deps):
 @patch("os.makedirs")
 @patch("os.chmod")
 @patch("builtins.open")
-@patch("aur_python_packer.builder.run_command")
+@patch("aur_python_packer.sandbox.run_command")
 @patch("aur_python_packer.builder.Builder._bootstrap_root")
 @patch("glob.glob")
 @patch("os.path.getmtime")

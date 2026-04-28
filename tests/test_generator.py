@@ -17,7 +17,8 @@ def test_fetch_pypi_meta(mock_get):
     mock_get.return_value.status_code = 200
     
     gen = PyPIGenerator()
-    meta = gen.fetch_meta("requests")
+    # Now fetch_meta is gone, but generator uses client.get_metadata internally.
+    meta = gen.pypi_client.get_metadata("requests")
     assert meta['name'] == "requests"
     assert meta['version'] == "2.31.0"
     assert meta['requires_dist'] == ["charset-normalizer", "idna"]

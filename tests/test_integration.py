@@ -7,7 +7,9 @@ from aur_python_packer.main import Manager
 @patch('aur_python_packer.resolver.DependencyResolver.get_build_order')
 @patch('aur_python_packer.builder.Builder.build')
 @patch('aur_python_packer.repo.RepoManager.add_package')
-def test_full_cycle(mock_add, mock_build, mock_order, mock_resolve, tmp_path):
+@patch('aur_python_packer.sandbox.Sandbox.run_host_command')
+@patch('aur_python_packer.builder.Builder._bootstrap_root')
+def test_full_cycle(mock_bootstrap, mock_run_host, mock_add, mock_build, mock_order, mock_resolve, tmp_path):
     mock_order.return_value = ["dep1", "target"]
     mock_build.return_value = "target-1.0.pkg.tar.zst"
     

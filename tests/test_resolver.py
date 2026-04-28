@@ -27,7 +27,7 @@ def test_circular_dependency():
         resolver.get_build_order()
 
 @patch('aur_python_packer.resolver.is_in_repos')
-@patch('aur_python_packer.resolver.get_aur_info')
+@patch('aur_python_packer.clients.AURClient.get_info')
 @patch('os.path.isdir')
 def test_resolve_cascade(mock_isdir, mock_aur, mock_repo):
     # Setup mocks
@@ -43,11 +43,11 @@ def test_resolve_cascade(mock_isdir, mock_aur, mock_repo):
     assert ("aur-pkg", "pacman") in resolver.graph.edges
     assert resolver.get_build_order() == ["pacman", "aur-pkg"]
 
-@patch('aur_python_packer.resolver.pypi_verify_existence')
+@patch('aur_python_packer.clients.PyPIClient.verify_existence')
 @patch('aur_python_packer.resolver.DependencyResolver.pypi_get_dependencies')
-@patch('aur_python_packer.resolver.pypi_get_full_meta')
+@patch('aur_python_packer.clients.PyPIClient.get_metadata')
 @patch('aur_python_packer.resolver.is_in_repos')
-@patch('aur_python_packer.resolver.get_aur_info')
+@patch('aur_python_packer.clients.AURClient.get_info')
 @patch('os.path.isdir')
 def test_resolve_pypi(mock_isdir, mock_aur, mock_repo, mock_pypi_meta, mock_pypi_deps, mock_pypi_verify):
     mock_isdir.return_value = False
@@ -73,11 +73,11 @@ def test_resolve_pypi(mock_isdir, mock_aur, mock_repo, mock_pypi_meta, mock_pypi
     assert resolver.graph.nodes["python-click"]["tier"] == "repo"
     assert ("python-fastmcp", "python-click") in resolver.graph.edges
 
-@patch('aur_python_packer.resolver.pypi_verify_existence')
+@patch('aur_python_packer.clients.PyPIClient.verify_existence')
 @patch('aur_python_packer.resolver.DependencyResolver.pypi_get_dependencies')
-@patch('aur_python_packer.resolver.pypi_get_full_meta')
+@patch('aur_python_packer.clients.PyPIClient.get_metadata')
 @patch('aur_python_packer.resolver.is_in_repos')
-@patch('aur_python_packer.resolver.get_aur_info')
+@patch('aur_python_packer.clients.AURClient.get_info')
 @patch('os.path.isdir')
 def test_resolve_pypi_redirect(mock_isdir, mock_aur, mock_repo, mock_pypi_meta, mock_pypi_deps, mock_pypi_verify):
     mock_isdir.return_value = False
