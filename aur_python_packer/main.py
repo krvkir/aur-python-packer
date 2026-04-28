@@ -5,6 +5,7 @@ import subprocess
 
 from aur_python_packer.builder import Builder
 from aur_python_packer.generator import PyPIGenerator
+from aur_python_packer.graph_utils import print_dependency_graph
 from aur_python_packer.repo import RepoManager
 from aur_python_packer.resolver import DependencyResolver, clone_aur_repo
 from aur_python_packer.state import StateManager
@@ -46,6 +47,9 @@ class Manager:
         self.resolver.resolve(target_pkg)
         order = self.resolver.get_build_order()
         logger.info(f"Build order: {' -> '.join(order)}")
+
+        # Show initial graph
+        print_dependency_graph(self.resolver.graph, self.state)
 
         for pkg in order:
             node_data = self.resolver.graph.nodes[pkg]
@@ -125,6 +129,9 @@ class Manager:
                     self.repo.add_package(pkg_file)
                     self.state.update_package(pkg, version, "success")
                     logger.info(f"Successfully built and added {pkg}")
+
+                    # Show updated graph
+                    print_dependency_graph(self.resolver.graph, self.state)
                 except Exception as e:
                     logger.error(f"Failed to build {pkg}: {e}")
                     self.state.update_package(pkg, "failed", "error")

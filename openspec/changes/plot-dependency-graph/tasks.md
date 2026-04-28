@@ -1,6 +1,6 @@
 ## 1. Environment Setup
 
-- [x] 1.1 Add `py-dagviz = "^0.1.0"` to `pyproject.toml` (corrected from `dagviz` which is SVG-only)
+- [x] 1.1 Add `py-dagviz = "^0.1.0"` to `pyproject.toml`
 - [x] 1.2 Run `poetry install` to update the virtual environment
 
 ## 2. Core Implementation
@@ -10,8 +10,15 @@
 - [x] 2.3 Implement color injection logic for terminal output using `re.sub` and `click.style`
 - [x] 2.4 Update `aur_python_packer/cli.py` to call `print_dependency_graph` in the `resolve` command
 
-## 3. Verification
+## 3. Enhancements
 
-- [x] 3.1 Verify DAG visualization with complex package dependencies
-- [x] 3.2 Verify `[built]` markers reflect the state in `build_index.json`
-- [x] 3.3 Verify automatic color stripping when output is piped (e.g., `resolve pkg | cat`)
+- [x] 3.1 Update `graph_utils.py` to handle "failed" status and colorize it in red
+- [x] 3.2 Update `cli.py` to catch `ValueError` from resolver and print a clean error message
+- [x] 3.3 Update `Manager.build_all` in `main.py` to display the dependency graph before starting
+- [x] 3.4 Update `Manager.build_all` in `main.py` to display the dependency graph after each successful build
+
+## 4. Verification
+
+- [x] 4.1 Verify "failed" status is correctly displayed and colorized in the graph
+- [x] 4.2 Verify unresolvable packages are reported gracefully without traceback
+- [x] 4.3 Verify graph is shown at the start and during the build process

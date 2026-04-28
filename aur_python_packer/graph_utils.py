@@ -7,7 +7,8 @@ def print_dependency_graph(graph: nx.DiGraph, state_manager):
     """
     Prints the dependency graph with status annotations and colors.
     
-    Nodes are annotated with [built] if they are already successfully built.
+    Nodes are annotated with [built] if they are already successfully built,
+    or [failed] if a previous build attempt failed.
     Tiers are shown in brackets, e.g., (pypi).
     
     Args:
@@ -26,6 +27,8 @@ def print_dependency_graph(graph: nx.DiGraph, state_manager):
             
         if pkg_state and pkg_state.get("status") == "success":
             label += " [built]"
+        elif pkg_state and pkg_state.get("status") == "failed":
+            label += " [failed]"
             
         labels[node] = label
     
@@ -41,10 +44,17 @@ def print_dependency_graph(graph: nx.DiGraph, state_manager):
         return
 
     # Post-processing for colorization to avoid dagviz layout issues with ANSI codes
-    # 1. Colorize [built] in green
+    # 1a. Colorize [built] in green
     graph_str = re.sub(
         r"\[built\]", 
         click.style("[built]", fg="green", bold=True), 
+        graph_str
+    )
+    
+    # 1b. Colorize [failed] in red
+    graph_str = re.sub(
+        r"\[failed\]", 
+        click.style("[failed]", fg="red", bold=True), 
         graph_str
     )
     

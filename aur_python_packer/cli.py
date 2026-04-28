@@ -38,7 +38,11 @@ def build(ctx, pkgname, path, nocheck):
     if path:
         mgr.resolver.search_paths = list(path)
 
-    mgr.build_all(pkgname, nocheck=nocheck)
+    try:
+        mgr.build_all(pkgname, nocheck=nocheck)
+    except ValueError as e:
+        click.secho(str(e), fg="red", err=True)
+        ctx.exit(1)
 
 
 @cli.command()
@@ -55,7 +59,11 @@ def resolve(ctx, pkgname, path):
         mgr.resolver.search_paths = list(path)
 
     print(f"Resolving dependencies for {pkgname}...")
-    mgr.resolver.resolve(pkgname)
+    try:
+        mgr.resolver.resolve(pkgname)
+    except ValueError as e:
+        click.secho(str(e), fg="red", err=True)
+        ctx.exit(1)
 
     print_dependency_graph(mgr.resolver.graph, mgr.state)
 
