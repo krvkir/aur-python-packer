@@ -236,11 +236,8 @@ class DependencyResolver:
 
 def is_in_repos(pkgname):
     """Check if package is in official repos."""
-    try:
-        run_command(["pacman", "-Si", pkgname])
-        return True
-    except subprocess.CalledProcessError:
-        return False
+    result = run_command(["pacman", "-Si", pkgname], check=False)
+    return result.returncode == 0
 
 
 def pypi_get_full_meta(pyname):
