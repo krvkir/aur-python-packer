@@ -3,6 +3,7 @@ import os
 
 import click
 
+from aur_python_packer.graph_utils import print_dependency_graph
 from aur_python_packer.logger import setup_logging
 from aur_python_packer.main import Manager
 
@@ -55,6 +56,9 @@ def resolve(ctx, pkgname, path):
 
     print(f"Resolving dependencies for {pkgname}...")
     mgr.resolver.resolve(pkgname)
+
+    print_dependency_graph(mgr.resolver.graph, mgr.state)
+
     order = mgr.resolver.get_build_order()
 
     print(f"\nBuild Order / Resolved Packages:")
