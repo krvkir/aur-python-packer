@@ -89,7 +89,7 @@ def cmd(ctx, command, cwd):
     print(f"Logging to: {log_path}")
 
     mgr = Manager(work_dir=workdir)
-    mgr.run_in_sandbox(command, cwd=cwd or workdir)
+    mgr.run_in_sandbox(command, cwd=cwd or workdir, check=False)
 
 
 def main():

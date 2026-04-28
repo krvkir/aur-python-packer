@@ -1,7 +1,7 @@
-import os
 import logging
-import subprocess
+import os
 import shlex
+import subprocess
 
 from aur_python_packer.builder import Builder
 from aur_python_packer.generator import PyPIGenerator, generate_srcinfo
@@ -11,6 +11,7 @@ from aur_python_packer.state import StateManager
 from aur_python_packer.utils import run_command
 
 logger = logging.getLogger(__name__)
+
 
 class Manager:
     def __init__(self, work_dir="work"):
@@ -34,7 +35,7 @@ class Manager:
             db_path_override=self.pacman_db_path,
             cache_path_override=self.pacman_cache_path,
             log_path_override=self.pacman_log_path,
-            gpg_dir_override=self.gpg_dir
+            gpg_dir_override=self.gpg_dir,
         )
         self.builder = Builder(work_dir=self.work_dir)
         self.resolver = DependencyResolver(self.work_dir)
@@ -89,15 +90,19 @@ class Manager:
                     # Sync local repo to allow pacman to find freshly built dependencies
                     try:
                         # Wrap in bwrap to allow fake root sync
+                        # fmt: off
                         sync_cmd = [
                             "bwrap", "--unshare-user", "--uid", "0", "--gid", "0",
                             "--bind", "/", "/",
                             "--bind", self.work_dir, self.work_dir,
                             "pacman", "-Sy", "--config", custom_conf, "--dbpath", self.pacman_db_path
                         ]
+                        # fmt: on
                         run_command(sync_cmd, log_level=logging.DEBUG)
                     except subprocess.CalledProcessError as e:
-                        logger.warning(f"Could not sync pacman database (non-fatal): {e.output.strip()}")
+                        logger.warning(
+                            f"Could not sync pacman database (non-fatal): {e.output.strip()}"
+                        )
 
                     version = node_data.get("version", "unknown")
                     pkg_file = self.builder.build(
@@ -116,27 +121,29 @@ class Manager:
                     self.state.update_package(pkg, "failed", "error")
                     break
 
-    def run_in_sandbox(self, command, cwd=None, log_level=logging.INFO):
+    def run_in_sandbox(self, command, cwd=None, log_level=logging.INFO, check=True):
         """Execute a command inside the chrooted sandbox environment."""
         if cwd is None:
             cwd = self.work_dir
 
-        custom_conf = self.repo.generate_custom_conf(
-            output_path=self.pacman_conf_path
-        )
+        custom_conf = self.repo.generate_custom_conf(output_path=self.pacman_conf_path)
         self.builder._bootstrap_root(custom_conf, self.pacman_db_path)
 
         # Sync local repo to allow pacman to find packages
+        # fmt: off
         sync_cmd = [
             "bwrap", "--unshare-user", "--uid", "0", "--gid", "0",
             "--bind", "/", "/",
             "--bind", self.work_dir, self.work_dir,
             "pacman", "-Sy", "--config", custom_conf, "--dbpath", self.pacman_db_path
         ]
+        # fmt: on
         try:
             run_command(sync_cmd, log_level=logging.DEBUG)
         except subprocess.CalledProcessError as e:
-            logger.warning(f"Could not sync pacman database (non-fatal): {e.output.strip()}")
+            logger.warning(
+                f"Could not sync pacman database (non-fatal): {e.output.strip()}"
+            )
 
         if isinstance(command, str):
             cmd_list = shlex.split(command)
@@ -149,5 +156,6 @@ class Manager:
             cwd=os.path.abspath(cwd),
             custom_conf=custom_conf,
             pacman_db_path=self.pacman_db_path,
-            log_level=log_level
+            log_level=log_level,
+            check=check,
         )

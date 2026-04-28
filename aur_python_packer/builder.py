@@ -1,12 +1,13 @@
 import glob
-import os
 import logging
+import os
 import shutil
 import subprocess
 
 from aur_python_packer.utils import run_command
 
 logger = logging.getLogger(__name__)
+
 
 class Builder:
     def __init__(self, work_dir):
@@ -21,7 +22,9 @@ class Builder:
 
         # Check for unprivileged user namespace support
         try:
-            subprocess.run(["unshare", "--user", "true"], check=True, capture_output=True)
+            subprocess.run(
+                ["unshare", "--user", "true"], check=True, capture_output=True
+            )
         except (subprocess.CalledProcessError, FileNotFoundError):
             raise RuntimeError(
                 "Unprivileged user namespaces are not supported or disabled. "
@@ -32,9 +35,11 @@ class Builder:
     def _bootstrap_root(self, custom_conf, pacman_db_path):
         # Check if root is already bootstrapped with fakeroot
         if os.path.exists(os.path.join(self.root_dir, "usr/bin/fakeroot")):
-             return
+            return
 
-        logger.info(f"Bootstrapping minimal root at {self.root_dir} (this may take a while)...")
+        logger.info(
+            f"Bootstrapping minimal root at {self.root_dir} (this may take a while)..."
+        )
         os.makedirs(self.root_dir, exist_ok=True)
         os.makedirs(os.path.join(self.root_dir, "var/lib/pacman"), exist_ok=True)
 
@@ -44,11 +49,12 @@ class Builder:
         host_conf = "/etc/pacman.conf"
         target_conf = os.path.join(self.root_dir, "etc/pacman.conf")
         if os.path.exists(host_conf):
-             os.makedirs(os.path.dirname(target_conf), exist_ok=True)
-             shutil.copy2(host_conf, target_conf)
+            os.makedirs(os.path.dirname(target_conf), exist_ok=True)
+            shutil.copy2(host_conf, target_conf)
 
         # Use pacman --root with bwrap to install base-devel into the directory
         # We use a separate dbpath to ensure we don't conflict with the host's or the custom DB.
+        # fmt: off
         cmd = [
             "bwrap", "--unshare-user", "--uid", "0", "--gid", "0",
             "--bind", "/", "/",
@@ -67,6 +73,7 @@ class Builder:
             "--root", self.root_dir,
             "--config", "/etc/pacman.conf",
         ]
+        # fmt: on
         # Use higher log level for bootstrap as it's a major operation
         run_command(cmd, log_level=logging.INFO)
 
@@ -108,27 +115,30 @@ class Builder:
             f.write("#!/bin/sh\n")
             f.write('for arg in "$@"; do\n')
             f.write('    case "$arg" in\n')
-            f.write('        pacman|*/pacman)\n')
+            f.write("        pacman|*/pacman)\n")
             f.write('            while [ "$1" != "$arg" ]; do shift; done\n')
-            f.write('            shift\n')
+            f.write("            shift\n")
             f.write(f'            exec {pacman_base} "$@"\n')
-            f.write('            ;;\n')
-            f.write('    esac\n')
-            f.write('done\n')
+            f.write("            ;;\n")
+            f.write("    esac\n")
+            f.write("done\n")
             f.write('if [ "$1" = "--" ]; then shift; fi\n')
             f.write('exec "$@"\n')
 
         # Pacman shim: ensures non-sudo pacman calls (like makepkg's pacman -T) also use the custom DB.
         with open(pacman_shim_path, "w") as f:
             f.write("#!/bin/sh\n")
-            f.write(f'exec /usr/bin/pacman --config "{custom_conf}" --dbpath "{pacman_db_path}" "$@"\n')
+            f.write(
+                f'exec /usr/bin/pacman --config "{custom_conf}" --dbpath "{pacman_db_path}" "$@"\n'
+            )
 
         os.chmod(sudo_shim_path, 0o755)
         os.chmod(pacman_shim_path, 0o755)
         return sudo_shim_path
 
-
-    def _run_in_sandbox(self, cmd, cwd, custom_conf, pacman_db_path, log_level=logging.DEBUG):
+    def _run_in_sandbox(
+        self, cmd, cwd, custom_conf, pacman_db_path, log_level=logging.DEBUG, check=True
+    ):
         etc_dir = os.path.join(self.work_dir, "etc")
         passwd_path = os.path.join(etc_dir, "passwd")
         group_path = os.path.join(etc_dir, "group")
@@ -149,6 +159,7 @@ class Builder:
         nproc = os.cpu_count() or 1
         # We map the current user to themselves (not root) to satisfy makepkg
         # Root operations for pacman will be handled via the sudo shim + fakeroot
+        # fmt: off
         bwrap_cmd = [
             "bwrap",
             "--unshare-user",
@@ -175,27 +186,40 @@ class Builder:
             "--setenv", "MAKEFLAGS", f"-j{nproc}",
             "--chdir", cwd
         ]
+        # fmt: on
 
         # Also bind-mount the directory being built if it's outside work_dir
         if not cwd.startswith(self.work_dir):
-             bwrap_cmd.extend(["--bind", cwd, cwd])
+            bwrap_cmd.extend(["--bind", cwd, cwd])
 
         logger.debug(f"Sandbox CWD: {cwd}")
         logger.debug(f"Sandbox PATH: {self.bin_dir}:/usr/bin")
         bwrap_cmd.extend(cmd)
 
-        run_command(bwrap_cmd, log_level=log_level)
+        run_command(bwrap_cmd, log_level=log_level, check=check)
 
-    def build(self, pkgname, directory, deps=None, nocheck=False, custom_conf=None, pacman_db_path=None):
+    def build(
+        self,
+        pkgname,
+        directory,
+        deps=None,
+        nocheck=False,
+        custom_conf=None,
+        pacman_db_path=None,
+    ):
         directory = os.path.abspath(directory)
 
         if not custom_conf:
             raise ValueError("custom_conf is required for rootless builds")
 
         self._bootstrap_root(custom_conf, pacman_db_path)
-        return self.execute_sandboxed_build(pkgname, directory, deps, nocheck, custom_conf, pacman_db_path)
+        return self.execute_sandboxed_build(
+            pkgname, directory, deps, nocheck, custom_conf, pacman_db_path
+        )
 
-    def execute_sandboxed_build(self, pkgname, directory, deps, nocheck, custom_conf, pacman_db_path):
+    def execute_sandboxed_build(
+        self, pkgname, directory, deps, nocheck, custom_conf, pacman_db_path
+    ):
         # Build command for makepkg
         # We use -s to install dependencies, which will use our sudo shim
         cmd = ["makepkg", "-s", "-f", "--noconfirm", "--skippgpcheck"]
@@ -211,7 +235,9 @@ class Builder:
         # We rely on Manager having done the sync, but inside the sandbox
         # we might need to ensure the DBPath is reachable.
 
-        self._run_in_sandbox(cmd, cwd=directory, custom_conf=custom_conf, pacman_db_path=pacman_db_path)
+        self._run_in_sandbox(
+            cmd, cwd=directory, custom_conf=custom_conf, pacman_db_path=pacman_db_path
+        )
         logger.info(f"Successfully finished building {pkgname}")
         return self._find_package_file(directory)
 
