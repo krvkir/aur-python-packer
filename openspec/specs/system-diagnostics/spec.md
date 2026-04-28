@@ -10,9 +10,15 @@ The system SHALL support concurrent logging to both the terminal for user feedba
 
 #### Scenario: Concurrent logging
 - **GIVEN** the application is running
-- **WHEN** a log message is generated
-- **THEN** high-level progress MUST appear on the terminal
-- **AND** detailed diagnostics MUST be written to the log file
+- **WHEN** an INFO level message is generated
+- **THEN** the message MUST appear on the terminal without a preamble
+- **AND** detailed diagnostics MUST be written to the log file with a full preamble
+
+#### Scenario: Warning and Error logging
+- **GIVEN** the application is running
+- **WHEN** a WARNING, ERROR, or CRITICAL message is generated
+- **THEN** the message MUST appear on the terminal with a minimal preamble (Level and Logger Name)
+- **AND** detailed diagnostics MUST be written to the log file with a full preamble (including Timestamp)
 
 ### Requirement: Automatic Log Management
 The system SHALL ensure the necessary logging infrastructure exists and manage log files automatically.
@@ -39,8 +45,8 @@ The system SHALL capture and interleave the standard output and standard error s
 - **THEN** the system MUST capture these in real-time and write them to the diagnostic log
 
 ## Implementation Notes
-- Logs are stored in the `logs/` directory.
-+ Logs are stored in the `logs/` directory within the configured workspace.
+- Logs are stored in the `logs/` directory within the configured workspace.
 - Log files follow the `run_YYYYMMDD_HHMMSS.log` format.
 - Uses `DEBUG` level for file logs and `INFO` level for terminal.
 - Captures `subprocess` metadata (commands, CWD, env).
+- Uses level-dependent formatting for terminal output to ensure clean progress messages.

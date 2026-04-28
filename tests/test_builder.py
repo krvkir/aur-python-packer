@@ -1,28 +1,47 @@
 import pytest
+import os
+import subprocess
 from unittest.mock import patch, MagicMock
 from aur_python_packer.builder import Builder
 
-@patch('os.path.exists')
-def test_os_detection_arch(mock_exists):
-    # Mocking Arch Linux detection via /etc/arch-release
-    mock_exists.side_effect = lambda x: x == "/etc/arch-release"
-    orch = Builder()
-    assert orch.os_type == "arch"
+@pytest.fixture
+def mock_builder_deps():
+    with patch("shutil.which") as mock_which, \
+         patch("subprocess.run") as mock_run:
+        mock_which.side_effect = lambda x: "/usr/bin/bwrap" if x == "bwrap" else None
+        mock_run.return_value = MagicMock(returncode=0)
+        yield mock_which, mock_run
 
-@patch('aur_python_packer.builder.run_command')
-@patch('shutil.which')
-@patch('os.path.getmtime')
-@patch('glob.glob')
-@patch('os.path.abspath')
-def test_build_arch(mock_abs, mock_glob, mock_mtime, mock_which, mock_run):
-    mock_abs.side_effect = lambda x: x
-    mock_glob.return_value = ["/path/to/pkg/test-pkg-1.0.pkg.tar.zst"]
-    mock_which.return_value = "/usr/bin/extra-x86_64-build"
-    mock_mtime.return_value = 123456789
-    orch = Builder()
-    orch.os_type = "arch"
-    orch.build("test-pkg", "path/to/pkg")
+def test_builder_init(mock_builder_deps):
+    builder = Builder(work_dir="/tmp/work")
+    assert builder.work_dir == os.path.abspath("/tmp/work")
+    assert builder.root_dir == os.path.join(builder.work_dir, "root")
+
+@patch("os.getlogin", return_value="testuser")
+@patch("os.getuid", return_value=1000)
+@patch("os.getgid", return_value=1000)
+@patch("os.makedirs")
+@patch("os.chmod")
+@patch("builtins.open")
+@patch("aur_python_packer.builder.run_command")
+@patch("aur_python_packer.builder.Builder._bootstrap_root")
+@patch("glob.glob")
+@patch("os.path.getmtime")
+def test_build(mock_mtime, mock_glob, mock_bootstrap, mock_run_cmd, mock_open, mock_chmod, mock_makedirs, mock_gid, mock_uid, mock_login, mock_builder_deps):
+    mock_glob.return_value = ["/tmp/work/pkg.tar.zst"]
+    mock_mtime.return_value = 1000
+    # Mock open to return a MagicMock for file writing
+    mock_open.return_value.__enter__.return_value = MagicMock()
     
-    assert mock_run.call_count == 1
-    args = mock_run.call_args[0][0]
-    assert "extra-x86_64-build" in args
+    builder = Builder(work_dir="/tmp/work")
+    pkg_path = builder.build(
+        pkgname="test-pkg",
+        directory="/tmp/work/build",
+        custom_conf="/tmp/pacman.conf",
+        pacman_db_path="/tmp/db"
+    )
+    
+    assert pkg_path == "/tmp/work/pkg.tar.zst"
+    mock_bootstrap.assert_called_once()
+    # Check if run_command was called (indirectly via _run_in_sandbox)
+    assert mock_run_cmd.called

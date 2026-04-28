@@ -3,6 +3,8 @@ import os
 import requests
 from jinja2 import Environment, PackageLoader, select_autoescape
 
+from aur_python_packer.utils import run_command
+
 logger = logging.getLogger(__name__)
 
 class PyPIGenerator:
@@ -94,3 +96,10 @@ class PyPIGenerator:
             f.write(self.render(pkg_data))
         return pkgbuild_path
 
+
+def generate_srcinfo(directory):
+    """Regenerate .SRCINFO using makepkg."""
+    cmd = ["makepkg", "--printsrcinfo"]
+    result = run_command(cmd, cwd=directory)
+    with open(os.path.join(directory, ".SRCINFO"), "w") as f:
+        f.write(result.stdout)

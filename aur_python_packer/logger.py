@@ -2,6 +2,23 @@ import logging
 import os
 from datetime import datetime
 
+class HumanReadableFormatter(logging.Formatter):
+    """
+    Custom formatter for terminal output:
+    - INFO: No preamble, just the message.
+    - WARNING and above: [LEVEL] Name: Message.
+    """
+    def __init__(self):
+        super().__init__()
+        self.info_formatter = logging.Formatter('%(message)s')
+        self.error_formatter = logging.Formatter('[%(levelname)s] %(name)s: %(message)s')
+
+    def format(self, record):
+        if record.levelno <= logging.INFO:
+            return self.info_formatter.format(record)
+        return self.error_formatter.format(record)
+
+
 def setup_logging(work_dir):
     """
     Sets up dual logging: 
@@ -31,7 +48,7 @@ def setup_logging(work_dir):
     # Console handler (INFO+)
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(formatter)
+    console_handler.setFormatter(HumanReadableFormatter())
     root_logger.addHandler(console_handler)
 
     return abs_log_path
