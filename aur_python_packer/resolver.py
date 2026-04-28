@@ -1,4 +1,5 @@
 import logging
+import json
 import os
 import re
 import subprocess
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 def parse_srcinfo(path):
     """Parse .SRCINFO and return pkgname and depends."""
-    depends = []
+    deps = []
     pkgname = None
     if not os.path.exists(path):
         return None
@@ -24,12 +25,12 @@ def parse_srcinfo(path):
             line = line.strip()
             if line.startswith("pkgname = "):
                 pkgname = line.split(" = ")[1]
-            elif line.startswith("depends = "):
+            elif line.startswith("depends = ") or line.startswith("makedepends = "):
                 dep = line.split(" = ")[1]
                 # Strip version constraints like 'python-foo>=1.0'
                 dep = re.split("[<>=]", dep)[0]
-                depends.append(dep)
-    return {"pkgname": pkgname, "depends": depends}
+                deps.append(dep)
+    return {"pkgname": pkgname, "depends": list(set(deps))}
 
 
 def parse_pkgbuild(path):
@@ -46,21 +47,28 @@ def parse_pkgbuild(path):
 
         # This is a very naive depends parser, won't handle arrays properly
         # but good enough for simple cases
-        depends_match = re.search(
-            r"depends=\((?P<deps>[^\)]+)\)", content, re.MULTILINE
-        )
-        if depends_match:
-            deps_str = depends_match.group("deps")
-            deps = [d.strip("\"'") for d in deps_str.split()]
-            metadata["depends"] = [re.split("[<>=]", d)[0] for d in deps]
+        all_deps = []
+        for key in ["depends", "makedepends"]:
+            match = re.search(
+                rf"{key}=\((?P<deps>[^\)]+)\)", content, re.MULTILINE
+            )
+            if match:
+                deps_str = match.group("deps")
+                deps = [d.strip("\"'") for d in deps_str.split()]
+                all_deps.extend([re.split("[<>=]", d)[0] for d in deps])
+        metadata["depends"] = list(set(all_deps))
     return metadata
 
 
 class DependencyResolver:
-    def __init__(self, search_paths=None):
+    def __init__(self, work_dir=None, search_paths=None):
         self.graph = nx.DiGraph()
+        self.work_dir = work_dir
         self.search_paths = search_paths or ["."]
+        if work_dir and work_dir not in self.search_paths:
+            self.search_paths.append(work_dir)
         self.visited = set()
+        self.mapping = self._load_mapping()
 
     def get_build_order(self):
         try:
@@ -68,6 +76,57 @@ class DependencyResolver:
         except nx.NetworkXUnfeasible:
             logger.error("Circular dependency detected in the dependency graph.")
             raise ValueError("Circular dependency detected")
+
+    def _load_mapping(self):
+        if self.work_dir:
+            mapping_path = os.path.join(self.work_dir, "pypi_mapping.json")
+            if os.path.exists(mapping_path):
+                with open(mapping_path, "r") as f:
+                    return json.load(f)
+        return {}
+
+    def normalize_pypi_name(self, name):
+        """Normalize PyPI name to Arch python- package name."""
+        name_lower = name.lower().replace('_', '-')
+        
+        # 1. Check explicit mapping
+        if name_lower in self.mapping:
+            return self.mapping[name_lower]
+        
+        # 2. Check if name or python-name exists in repos (trivial cases)
+        for candidate in [name_lower, f"python-{name_lower}"]:
+            if is_in_repos(candidate):
+                return candidate
+                
+        # 3. Default
+        return f"python-{name_lower}"
+
+    def parse_pypi_dependency(self, req_str):
+        """Parse PEP 508 dependency string and return Arch package name if it applies."""
+        req = Requirement(req_str)
+        # Skip extra dependencies (e.g. [test], [doc]) for now
+        if req.marker:
+            # This is a very basic marker check. If it contains 'extra ==', skip it.
+            if "extra ==" in str(req.marker):
+                return None
+        return self.normalize_pypi_name(req.name)
+
+    def pypi_get_dependencies(self, pyname):
+        """Fetch dependencies for a PyPI package."""
+        url = f"https://pypi.org/pypi/{pyname}/json"
+        try:
+            resp = requests.get(url, timeout=10)
+            resp.raise_for_status()
+            data = resp.json()
+            requires_dist = data["info"].get("requires_dist") or []
+            deps = []
+            for req_str in requires_dist:
+                arch_dep = self.parse_pypi_dependency(req_str)
+                if arch_dep:
+                    deps.append(arch_dep)
+            return deps
+        except Exception:
+            return []
 
     def resolve(self, pkgname):
         if pkgname in self.visited:
@@ -122,7 +181,7 @@ class DependencyResolver:
 
         if pypi_verify_existence(pyname):
             logger.debug(f"Found {pyname} on PyPI")
-            arch_name = normalize_pypi_name(pyname)
+            arch_name = self.normalize_pypi_name(pyname)
             if pkgname != arch_name:
                 self.resolve(arch_name)
                 self.graph.add_edge(pkgname, arch_name)
@@ -136,7 +195,7 @@ class DependencyResolver:
                 pyname=pyname,
                 version=pypi_meta.get("version"),
             )
-            deps = pypi_get_dependencies(pyname)
+            deps = self.pypi_get_dependencies(pyname)
             for dep in deps:
                 self.graph.add_edge(pkgname, dep)
                 self.resolve(dep)
@@ -184,47 +243,12 @@ def is_in_repos(pkgname):
         return False
 
 
-def normalize_pypi_name(name):
-    """Normalize PyPI name to Arch python- package name."""
-    return f"python-{name.lower().replace('_', '-')}"
-
-
-def parse_pypi_dependency(req_str):
-    """Parse PEP 508 dependency string and return Arch package name if it applies."""
-    req = Requirement(req_str)
-    # Skip extra dependencies (e.g. [test], [doc]) for now
-    if req.marker:
-        # This is a very basic marker check. If it contains 'extra ==', skip it.
-        if "extra ==" in str(req.marker):
-            return None
-    return normalize_pypi_name(req.name)
-
-
 def pypi_get_full_meta(pyname):
     """Fetch full metadata for a PyPI package."""
     url = f"https://pypi.org/pypi/{pyname}/json"
     resp = requests.get(url, timeout=10)
     resp.raise_for_status()
     return resp.json()["info"]
-
-
-def pypi_get_dependencies(pyname):
-    """Fetch dependencies for a PyPI package."""
-    url = f"https://pypi.org/pypi/{pyname}/json"
-    try:
-        resp = requests.get(url, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-        requires_dist = data["info"].get("requires_dist") or []
-        deps = []
-        for req_str in requires_dist:
-            arch_dep = parse_pypi_dependency(req_str)
-            if arch_dep:
-                deps.append(arch_dep)
-        return deps
-    except Exception:
-        return []
-
 
 def pypi_verify_existence(pyname):
     """Verify if a package exists on PyPI."""

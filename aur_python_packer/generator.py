@@ -20,17 +20,17 @@ arch=('any')
 url="{{ url }}"
 license=('{{ license }}')
 depends=({% for dep in depends %}'{{ dep }}' {% endfor %})
-makedepends=('python-build' 'python-installer' 'python-setuptools' 'python-wheel')
+makedepends=({% for dep in makedepends %}'{{ dep }}' {% endfor %})
 source=("{{ source_url }}")
 sha256sums=('{{ sha256 }}')
 
 build() {
-    cd "$srcdir/$_name-$pkgver"
+    cd "$srcdir"/*-"$pkgver"
     python -m build --wheel --no-isolation
 }
 
 package() {
-    cd "$srcdir/$_name-$pkgver"
+    cd "$srcdir"/*-"$pkgver"
     python -m installer --destdir="$pkgdir" dist/*.whl
 }
 """
@@ -78,11 +78,10 @@ class PyPIGenerator:
         meta = self.fetch_meta(pyname)
         release_info = self.get_release_info(pyname, meta["version"])
 
-        # Clean up license: take first line, remove common suffixes
-        license = meta["license"].split('\n')[0]
-        for suffix in [" License", " (BSD)"]:
-            if license.endswith(suffix):
-                license = license[:-len(suffix)]
+        # Minimal default makedepends
+        makedepends = ['python-build', 'python-installer', 'python-setuptools', 'python-wheel']
+        if any("hatchling" in str(d).lower() for d in meta["requires_dist"]):
+             makedepends.append('python-hatchling')
 
         pkg_data = {
             "pkgname": f"python-{pyname.lower()}",
@@ -90,10 +89,11 @@ class PyPIGenerator:
             "pkgver": meta["version"],
             "pkgdesc": meta["summary"],
             "url": meta["home_page"],
-            "license": license,
+            "license": meta["license"],
             "sha256": release_info["sha256"] if release_info else "",
             "source_url": release_info["url"] if release_info else "",
             "depends": depends or [],
+            "makedepends": makedepends,
         }
 
         os.makedirs(output_dir, exist_ok=True)
