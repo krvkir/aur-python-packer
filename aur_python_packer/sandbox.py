@@ -12,6 +12,7 @@ class Sandbox:
     Manages execution isolation using Bubblewrap (bwrap).
     Handles bind mounts, user namespaces, and shim generation.
     """
+
     def __init__(self, work_dir, root_dir):
         self.work_dir = os.path.abspath(work_dir)
         self.root_dir = os.path.abspath(root_dir)
@@ -100,34 +101,26 @@ class Sandbox:
         Useful for bootstrapping or syncing databases where we want to use host's pacman
         but modify files in the work_dir/sandbox without root privileges.
         """
+        # fmt: off
         bwrap_cmd = [
             "bwrap",
             "--unshare-user",
-            "--uid",
-            "0",
-            "--gid",
-            "0",
-            "--bind",
-            "/",
-            "/",
-            "--dev",
-            "/dev",
-            "--proc",
-            "/proc",
-            "--bind",
-            self.work_dir,
-            self.work_dir,
-            "--bind",
-            self.root_dir,
-            self.root_dir,
+            "--uid", "0",
+            "--gid", "0",
+            "--bind", "/", "/",
+            "--dev", "/dev",
+            "--proc", "/proc",
+            "--bind", self.work_dir, self.work_dir,
+            "--bind", self.root_dir, self.root_dir,
         ]
+        # fmt: on
         bwrap_cmd.extend(cmd)
         return run_command(bwrap_cmd, log_level=log_level, check=check)
 
     def generate_shims(self, custom_conf, pacman_db_path):
         """
         Generates sudo and pacman shell shims.
-        
+
         These shims intercept calls from tools like makepkg and redirect them
         to use the custom pacman configuration and database path, enabling
         rootless dependency installation and checking.
