@@ -2,23 +2,21 @@
 
 ## Purpose
 Provides comprehensive logging and diagnostic capabilities to monitor tool execution, capture command outputs, and facilitate troubleshooting of build failures.
-
 ## Requirements
-
 ### Requirement: Dual-Output Logging
-The system SHALL support concurrent logging to both the terminal for user feedback and a persistent file for detailed diagnostics.
+The system SHALL support concurrent logging to both the terminal for user feedback and a persistent file for detailed diagnostics, using human-readable formats in the terminal.
 
-#### Scenario: Concurrent logging
+#### Scenario: INFO level terminal logging
 - **GIVEN** the application is running
-- **WHEN** an INFO level message is generated
-- **THEN** the message MUST appear on the terminal without a preamble
-- **AND** detailed diagnostics MUST be written to the log file with a full preamble
+- **WHEN** an INFO level log message is generated
+- **THEN** only the message content MUST appear on the terminal (no preamble)
+- **AND** the full diagnostic preamble (timestamp, level, name) MUST be written to the log file
 
-#### Scenario: Warning and Error logging
+#### Scenario: WARNING and above level terminal logging
 - **GIVEN** the application is running
-- **WHEN** a WARNING, ERROR, or CRITICAL message is generated
-- **THEN** the message MUST appear on the terminal with a minimal preamble (Level and Logger Name)
-- **AND** detailed diagnostics MUST be written to the log file with a full preamble (including Timestamp)
+- **WHEN** a WARNING, ERROR, or CRITICAL level log message is generated
+- **THEN** the message MUST appear on the terminal with a minimal preamble `[LEVEL] Name: message`
+- **AND** the full diagnostic preamble (timestamp, level, name) MUST be written to the log file
 
 ### Requirement: Automatic Log Management
 The system SHALL ensure the necessary logging infrastructure exists and manage log files automatically.
