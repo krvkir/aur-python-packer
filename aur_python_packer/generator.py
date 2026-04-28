@@ -21,7 +21,7 @@ url="{{ url }}"
 license=('{{ license }}')
 depends=({% for dep in depends %}'{{ dep }}' {% endfor %})
 makedepends=('python-build' 'python-installer' 'python-setuptools' 'python-wheel')
-source=("https://files.pythonhosted.org/packages/source/${_name::1}/$_name/$_name-$pkgver.tar.gz")
+source=("{{ source_url }}")
 sha256sums=('{{ sha256 }}')
 
 build() {
@@ -56,16 +56,19 @@ class PyPIGenerator:
             "requires_dist": info.get("requires_dist") or [],
         }
 
-    def get_sha256(self, pyname, version):
+    def get_release_info(self, pyname, version):
         # This is a bit complex as we need to find the correct sdist URL
-        logger.debug(f"Fetching PyPI release info for {pyname}=={version} to get SHA256")
+        logger.debug(f"Fetching PyPI release info for {pyname}=={version}")
         url = f"https://pypi.org/pypi/{pyname}/{version}/json"
         resp = requests.get(url)
         resp.raise_for_status()
         data = resp.json()
         for release in data["urls"]:
             if release["packagetype"] == "sdist":
-                return release["digests"]["sha256"]
+                return {
+                    "sha256": release["digests"]["sha256"],
+                    "url": release["url"]
+                }
         return None
 
     def render(self, meta):
@@ -73,7 +76,7 @@ class PyPIGenerator:
 
     def generate(self, pyname, output_dir, depends=None):
         meta = self.fetch_meta(pyname)
-        sha256 = self.get_sha256(pyname, meta["version"])
+        release_info = self.get_release_info(pyname, meta["version"])
 
         # Clean up license: take first line, remove common suffixes
         license = meta["license"].split('\n')[0]
@@ -88,7 +91,8 @@ class PyPIGenerator:
             "pkgdesc": meta["summary"],
             "url": meta["home_page"],
             "license": license,
-            "sha256": sha256,
+            "sha256": release_info["sha256"] if release_info else "",
+            "source_url": release_info["url"] if release_info else "",
             "depends": depends or [],
         }
 
