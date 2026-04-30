@@ -19,12 +19,12 @@ The system SHALL support concurrent logging to both the terminal for user feedba
 - **AND** the full diagnostic preamble (timestamp, level, name) MUST be written to the log file
 
 ### Requirement: Automatic Log Management
-The system SHALL ensure the necessary logging infrastructure exists and manage log files automatically.
+The system SHALL ensure the diagnostic logs are stored within a dedicated `logs/` directory inside the configured workspace.
 
 #### Scenario: Log directory initialization
 - **GIVEN** the application starts
-- **WHEN** the log storage directory is missing
-- **THEN** the system MUST create it automatically
+- **WHEN** the workspace is initialized
+- **THEN** the system MUST ensure a `logs/` directory exists within it for storing session logs.
 
 ### Requirement: Command Invocation Tracking
 The system SHALL record detailed metadata for every external command executed (e.g., `makepkg`, `pacman`, `repo-add`), including arguments and environment.
