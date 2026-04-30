@@ -18,11 +18,12 @@ class StateManager:
         with open(self.state_file, 'w') as f:
             json.dump(self.state, f, indent=4)
 
-    def update_package(self, pkgname, version, status):
+    def update_package(self, pkgname, version, status, skipped_checks=False):
         self.state["packages"][pkgname] = {
             "version": version,
             "status": status,
-            "last_build": datetime.now().isoformat()
+            "last_build": datetime.now().isoformat(),
+            "skipped_checks": skipped_checks
         }
         self.save()
 

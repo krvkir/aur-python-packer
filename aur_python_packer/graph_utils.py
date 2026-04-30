@@ -26,7 +26,10 @@ def print_dependency_graph(graph: nx.DiGraph, state_manager):
             label += f" ({tier})"
             
         if pkg_state and pkg_state.get("status") == "success":
-            label += " [built]"
+            if pkg_state.get("skipped_checks"):
+                label += " [built (no checks)]"
+            else:
+                label += " [built]"
         elif pkg_state and pkg_state.get("status") == "failed":
             label += " [failed]"
             
@@ -46,8 +49,8 @@ def print_dependency_graph(graph: nx.DiGraph, state_manager):
     # Post-processing for colorization to avoid dagviz layout issues with ANSI codes
     # 1a. Colorize [built] in green
     graph_str = re.sub(
-        r"\[built\]", 
-        click.style("[built]", fg="green", bold=True), 
+        r"(\[built(?: \(no checks\))?\])", 
+        lambda m: click.style(m.group(1), fg="green", bold=True), 
         graph_str
     )
     

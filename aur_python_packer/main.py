@@ -74,7 +74,7 @@ class Manager:
 
             # Check if already built in this run or previous
             current_state = self.state.get_package(pkg)
-            if current_state and current_state.get("status") == "success":
+            if current_state and current_state.get("status") == "success" and current_state.get("version") == node_data.get("version"):
                 logger.info(f"Package {pkg} already built, skipping.")
                 continue
 
@@ -91,7 +91,7 @@ class Manager:
                 pkg_dir = node_data.get("path")
                 if not pkg_dir:
                     logger.error(f"AUR package {pkg} has no source path")
-                    self.state.update_package(pkg, "failed", "missing_path")
+                    self.state.update_package(pkg, node_data.get("version", "unknown"), "failed")
                     break
             elif tier == "pypi":
                 pyname = node_data.get("pyname") or pkg.replace("python-", "")
@@ -116,23 +116,40 @@ class Manager:
                     self._sync_pacman(custom_conf)
 
                     version = node_data.get("version", "unknown")
-                    pkg_file = self.builder.build(
-                        pkg,
-                        os.path.abspath(pkg_dir),
-                        deps=self.repo.get_package_files(),
-                        nocheck=nocheck,
-                        custom_conf=custom_conf,
-                        pacman_db_path=self.pacman_db_path,
-                    )
+                    try:
+                        pkg_file = self.builder.build(
+                            pkg,
+                            os.path.abspath(pkg_dir),
+                            deps=self.repo.get_package_files(),
+                            nocheck=nocheck,
+                            custom_conf=custom_conf,
+                            pacman_db_path=self.pacman_db_path,
+                        )
+                        skipped = nocheck
+                    except Exception as e:
+                        if not nocheck:
+                            logger.info(f"Build failed for {pkg}, retrying with --nocheck...")
+                            pkg_file = self.builder.build(
+                                pkg,
+                                os.path.abspath(pkg_dir),
+                                deps=self.repo.get_package_files(),
+                                nocheck=True,
+                                custom_conf=custom_conf,
+                                pacman_db_path=self.pacman_db_path,
+                            )
+                            skipped = True
+                        else:
+                            raise e
+
                     self.repo.add_package(pkg_file)
-                    self.state.update_package(pkg, version, "success")
+                    self.state.update_package(pkg, version, "success", skipped_checks=skipped)
                     logger.info(f"Successfully built and added {pkg}")
 
                     # Show updated graph
                     print_dependency_graph(self.resolver.graph, self.state)
                 except Exception as e:
                     logger.error(f"Failed to build {pkg}: {e}")
-                    self.state.update_package(pkg, "failed", "error")
+                    self.state.update_package(pkg, version, "failed")
                     break
 
     def _sync_pacman(self, custom_conf):
