@@ -16,8 +16,9 @@ class Sandbox:
     def __init__(self, work_dir, root_dir):
         self.work_dir = os.path.abspath(work_dir)
         self.root_dir = os.path.abspath(root_dir)
-        self.bin_dir = os.path.join(self.work_dir, "bin")
-        self.etc_dir = os.path.join(self.work_dir, "etc")
+        self.srv_dir = os.path.join(self.work_dir, "srv")
+        self.bin_dir = os.path.join(self.srv_dir, "bin")
+        self.etc_dir = os.path.join(self.srv_dir, "etc")
 
     def get_bwrap_command(self, cmd, cwd, custom_conf, pacman_db_path, share_net=False):
         """

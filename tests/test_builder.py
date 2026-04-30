@@ -15,7 +15,7 @@ def mock_builder_deps():
 def test_builder_init(mock_builder_deps):
     builder = Builder(work_dir="/tmp/work")
     assert builder.work_dir == os.path.abspath("/tmp/work")
-    assert builder.root_dir == os.path.join(builder.work_dir, "root")
+    assert builder.root_dir == os.path.join(builder.work_dir, "srv", "root")
 
 @patch("os.getlogin", return_value="testuser")
 @patch("os.getuid", return_value=1000)

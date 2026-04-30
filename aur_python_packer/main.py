@@ -24,16 +24,20 @@ class Manager:
         self.work_dir = os.path.abspath(work_dir)
         os.makedirs(self.work_dir, exist_ok=True)
 
-        self.state_file = os.path.join(self.work_dir, "build_index.json")
+        self.srv_dir = os.path.join(self.work_dir, "srv")
+        self.state_file = os.path.join(self.srv_dir, "build_index.json")
         self.repo_dir = os.path.join(self.work_dir, "local_repo")
-        self.aur_cache_dir = os.path.join(self.work_dir, "aur_cache")
-        # self.generated_dir = os.path.join(self.work_dir, "generated")
-        self.generated_dir = self.work_dir
-        self.pacman_conf_path = os.path.join(self.work_dir, "pacman.conf")
-        self.pacman_db_path = os.path.join(self.work_dir, "pacman_db")
-        self.pacman_cache_path = os.path.join(self.work_dir, "pacman_cache")
-        self.pacman_log_path = os.path.join(self.work_dir, "pacman.log")
-        self.gpg_dir = os.path.join(self.work_dir, "gnupg")
+        self.aur_packages_dir = os.path.join(self.work_dir, "aur_packages")
+        self.packages_dir = os.path.join(self.work_dir, "packages")
+        self.pacman_conf_path = os.path.join(self.srv_dir, "pacman.conf")
+        self.pacman_db_path = os.path.join(self.srv_dir, "pacman_db")
+        self.pacman_cache_path = os.path.join(self.srv_dir, "pacman_cache")
+        self.pacman_log_path = os.path.join(self.srv_dir, "pacman.log")
+        self.gpg_dir = os.path.join(self.srv_dir, "gnupg")
+
+        # Ensure core directories exist
+        for d in [self.srv_dir, self.repo_dir, self.aur_packages_dir, self.packages_dir]:
+            os.makedirs(d, exist_ok=True)
 
         self.state = StateManager(self.state_file)
         self.repo = RepoManager(
@@ -44,7 +48,9 @@ class Manager:
             gpg_dir_override=self.gpg_dir,
         )
         self.builder = Builder(work_dir=self.work_dir)
-        self.resolver = DependencyResolver(self.work_dir)
+        self.resolver = DependencyResolver(
+            self.work_dir, search_paths=[self.packages_dir, self.aur_packages_dir]
+        )
         self.generator = PyPIGenerator()
         self.aur_client = AURClient()
         self.metadata_parser = MetadataParser()
@@ -82,14 +88,14 @@ class Manager:
             if tier == "local":
                 pkg_dir = node_data["path"]
             elif tier == "aur":
-                pkg_dir = self.aur_client.clone_repo(pkg, self.aur_cache_dir)
+                pkg_dir = self.aur_client.clone_repo(pkg, self.aur_packages_dir)
                 if not pkg_dir:
                     logger.error(f"Failed to clone AUR repo for {pkg}")
                     self.state.update_package(pkg, "failed", "clone_error")
                     break
             elif tier == "pypi":
                 pyname = node_data.get("pyname") or pkg.replace("python-", "")
-                pkg_dir = os.path.join(self.generated_dir, pkg)
+                pkg_dir = os.path.join(self.packages_dir, pkg)
                 if not os.path.exists(os.path.join(pkg_dir, "PKGBUILD")):
                     depends = list(self.resolver.graph.successors(pkg))
                     self.generator.generate(pyname, pkg_dir, depends=depends)

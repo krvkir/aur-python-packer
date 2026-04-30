@@ -25,4 +25,4 @@ def test_full_cycle(mock_bootstrap, mock_run_host, mock_add, mock_build, mock_or
     assert mock_add.call_count == 1
 
     # Verify state file was created
-    assert os.path.exists(os.path.join(tmp_path, "build_index.json"))
+    assert os.path.exists(os.path.join(tmp_path, "srv", "build_index.json"))

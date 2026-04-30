@@ -89,10 +89,10 @@ package() {
 EOF
 
 # Pre-create the fakeroot dummy in the work dir to skip bootstrapping
-# The tool expects it at $WORK_DIR/root/usr/bin/fakeroot
+# The tool expects it at $WORK_DIR/srv/root/usr/bin/fakeroot
 WORK_DIR="$TEST_DIR/work"
-mkdir -p "$WORK_DIR/root/usr/bin"
-touch "$WORK_DIR/root/usr/bin/fakeroot"
+mkdir -p "$WORK_DIR/srv/root/usr/bin"
+touch "$WORK_DIR/srv/root/usr/bin/fakeroot"
 
 # Run the manager using the new CLI
 # aur-python-packer -w <workdir> build <pkgname> --path <search_path> --nocheck
@@ -113,6 +113,6 @@ if [ ! -f "$WORK_DIR/local_repo/localrepo.db.tar.gz" ]; then
 fi
 
 # Check build_index.json
-grep -q "success" "$WORK_DIR/build_index.json" || (echo "FAILED: State not updated to success"; exit 1)
+grep -q "success" "$WORK_DIR/srv/build_index.json" || (echo "FAILED: State not updated to success"; exit 1)
 
 echo "INTEGRATION TEST PASSED"

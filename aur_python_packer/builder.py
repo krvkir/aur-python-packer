@@ -16,7 +16,8 @@ class Builder:
     """
     def __init__(self, work_dir):
         self.work_dir = os.path.abspath(work_dir)
-        self.root_dir = os.path.join(self.work_dir, "root")
+        self.srv_dir = os.path.join(self.work_dir, "srv")
+        self.root_dir = os.path.join(self.srv_dir, "root")
         self.sandbox = Sandbox(self.work_dir, self.root_dir)
         self.metadata_parser = MetadataParser()
         self._check_dependencies()
