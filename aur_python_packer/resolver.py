@@ -20,6 +20,10 @@ class DependencyResolver:
         self.work_dir = work_dir
         self.search_paths = search_paths or ["."]
         if work_dir and work_dir not in self.search_paths: self.search_paths.append(work_dir)
+        
+        self.packages_dir = os.path.join(work_dir, "packages") if work_dir else None
+        self.aur_packages_dir = os.path.join(work_dir, "aur_packages") if work_dir else None
+
         self.visited = set()
         self.mapping = self._load_mapping()
         self.metadata_parser = MetadataParser()
@@ -61,8 +65,9 @@ class DependencyResolver:
         
         # 2. Check if name or python-name exists in repos (trivial cases)
         for candidate in [name_lower, f"python-{name_lower}"]:
-            if is_in_repos(candidate):
-                return candidate
+            provider = find_provider_in_repos(candidate)
+            if provider:
+                return provider
                 
         # 3. Default
         return f"python-{name_lower}"
@@ -96,13 +101,7 @@ class DependencyResolver:
 
     def resolve(self, pkgname):
         """
-        Recursively resolves dependencies for a package.
-        
-        Resolution Priority:
-        1. Local directory (PKGBUILD/SRCINFO)
-        2. Official Repositories
-        3. AUR
-        4. PyPI (Generates new package)
+        Recursively resolves dependencies for a package following a 4-tier sequence.
         """
         if pkgname in self.visited:
             return
@@ -110,46 +109,63 @@ class DependencyResolver:
 
         logger.debug(f"Resolving dependency: {pkgname}")
 
-        # 1. Check Local
-        local_meta = self._find_local(pkgname)
-        if local_meta:
-            logger.debug(f"Found {pkgname} locally at {local_meta['path']}")
-            self.graph.add_node(pkgname, tier="local", path=local_meta["path"])
-            for dep in local_meta.get("depends", []):
-                self.graph.add_edge(pkgname, dep)
-                self.resolve(dep)
+        # Tier 1: Newly Created Packages
+        if self.packages_dir:
+            meta = self._find_in_dir(pkgname, self.packages_dir)
+            if meta:
+                logger.debug(f"Found {pkgname} in newly created packages")
+                self._add_to_graph(pkgname, meta, tier="local")
+                return
+
+        # Tier 2: Official Repositories
+        provider = find_provider_in_repos(pkgname)
+        if provider:
+            logger.debug(f"Found {pkgname} in official repositories (provider: {provider})")
+            if provider != pkgname:
+                self.graph.add_node(provider, tier="repo")
+                self.graph.add_edge(pkgname, provider)
+            else:
+                self.graph.add_node(pkgname, tier="repo")
             return
 
-        # 2. Check Repos
-        if is_in_repos(pkgname):
-            logger.debug(f"Found {pkgname} in official repositories")
-            self.graph.add_node(pkgname, tier="repo")
-            return
+        # Tier 3: AUR (Local Clones)
+        if self.aur_packages_dir:
+            meta = self._find_in_dir(pkgname, self.aur_packages_dir)
+            if meta:
+                logger.debug(f"Found {pkgname} in local AUR clones")
+                self._add_to_graph(pkgname, meta, tier="aur")
+                return
 
-        # 3. Check AUR
+        # Tier 4: AUR (Remote RPC + Clone)
         aur_meta = self.aur_client.get_info(pkgname)
         if aur_meta:
-            logger.debug(f"Found {pkgname} in AUR")
-            self.graph.add_node(
-                pkgname,
-                tier="aur",
-                version=aur_meta.get("Version"),
-                pkgname=aur_meta.get("Name"),
-            )
-            # AUR RPC returns Depends, MakeDepends, and CheckDepends
+            logger.info(f"Found {pkgname} in AUR, cloning immediately...")
+            if self.aur_packages_dir:
+                pkg_dir = self.aur_client.clone_repo(pkgname, self.aur_packages_dir)
+                if pkg_dir:
+                    meta = self._find_in_dir(pkgname, self.aur_packages_dir)
+                    if meta:
+                        self._add_to_graph(pkgname, meta, tier="aur")
+                        return
+            
+            # Fallback if clone failed or no dir set
             deps = (
                 aur_meta.get("Depends", [])
                 + aur_meta.get("MakeDepends", [])
                 + aur_meta.get("CheckDepends", [])
             )
+            self.graph.add_node(
+                pkgname,
+                tier="aur",
+                version=aur_meta.get("Version"),
+            )
             for dep in deps:
-                # Strip version constraints
                 dep_name = re.split("[<>=]", dep)[0]
                 self.graph.add_edge(pkgname, dep_name)
                 self.resolve(dep_name)
             return
 
-        # 4. Check PyPI
+        # Tier 5: PyPI
         pyname = pkgname
         if pkgname.startswith("python-"):
             pyname = pkgname[7:]
@@ -158,8 +174,6 @@ class DependencyResolver:
             logger.debug(f"Found {pyname} on PyPI")
             arch_name = self.normalize_pypi_name(pyname)
             if pkgname != arch_name:
-                # If we're resolving e.g. 'fastmcp', but it should be 'python-fastmcp',
-                # redirect the resolution.
                 self.resolve(arch_name)
                 self.graph.add_edge(pkgname, arch_name)
                 return
@@ -180,38 +194,67 @@ class DependencyResolver:
         logger.error(f"Could not resolve dependency: {pkgname}")
         raise ValueError(f"Could not resolve dependency: {pkgname}")
 
-    def _find_local(self, pkgname):
+    def _find_in_dir(self, pkgname, directory):
         """
-        Searches for a local directory containing a PKGBUILD for the given package.
+        Searches for a subdirectory containing a PKGBUILD for the given package.
         """
-        for base in self.search_paths:
-            pkg_path = os.path.join(base, pkgname)
-            if os.path.isdir(pkg_path):
-                pkgbuild_path = os.path.join(pkg_path, "PKGBUILD")
-                if os.path.exists(pkgbuild_path):
-                    srcinfo_path = os.path.join(pkg_path, ".SRCINFO")
-                    # Check if .SRCINFO needs regeneration
-                    if not os.path.exists(srcinfo_path) or os.path.getmtime(
-                        pkgbuild_path
-                    ) > os.path.getmtime(srcinfo_path):
-                        logger.debug(f".SRCINFO is missing or stale for {pkgname}, (re)generating...")
-                        self.metadata_parser.generate_srcinfo(pkg_path)
+        pkg_path = os.path.join(directory, pkgname)
+        if os.path.isdir(pkg_path):
+            pkgbuild_path = os.path.join(pkg_path, "PKGBUILD")
+            if os.path.exists(pkgbuild_path):
+                srcinfo_path = os.path.join(pkg_path, ".SRCINFO")
+                # Check if .SRCINFO needs regeneration
+                if not os.path.exists(srcinfo_path) or os.path.getmtime(
+                    pkgbuild_path
+                ) > os.path.getmtime(srcinfo_path):
+                    logger.debug(f".SRCINFO is missing or stale for {pkgname}, (re)generating...")
+                    self.metadata_parser.generate_srcinfo(pkg_path)
 
-                    if os.path.exists(srcinfo_path):
-                        meta = self.metadata_parser.parse_srcinfo(srcinfo_path)
-                        if meta:
-                            meta["path"] = pkg_path
-                            return meta
-
-                    meta = self.metadata_parser.parse_pkgbuild(pkgbuild_path)
+                if os.path.exists(srcinfo_path):
+                    meta = self.metadata_parser.parse_srcinfo(srcinfo_path)
                     if meta:
                         meta["path"] = pkg_path
                         return meta
+
+                meta = self.metadata_parser.parse_pkgbuild(pkgbuild_path)
+                if meta:
+                    meta["path"] = pkg_path
+                    return meta
         return None
+
+    def _add_to_graph(self, pkgname, meta, tier):
+        """Helper to add node and resolve its dependencies."""
+        self.graph.add_node(
+            pkgname, 
+            tier=tier, 
+            path=meta.get("path"), 
+            version=meta.get("pkgver") or meta.get("version")
+        )
+        for dep in meta.get("depends", []):
+            self.graph.add_edge(pkgname, dep)
+            self.resolve(dep)
+
+def find_provider_in_repos(pkgname):
+    """
+    Checks if a package or something providing it exists in official repos.
+    Returns the actual package name if found, else None.
+    """
+    # 1. Direct hit
+    result = run_command(["pacman", "-Ssq", f"^{pkgname}$"], check=False)
+    if result.returncode == 0 and result.stdout.strip():
+        return result.stdout.strip().splitlines()[0]
+
+    # 2. Check provides
+    result = run_command(["pacman", "-Ssq", "--provides", f"^{pkgname}$"], check=False)
+    if result.returncode == 0 and result.stdout.strip():
+        providers = result.stdout.strip().splitlines()
+        if providers:
+            return providers[0]
+
+    return None
 
 def is_in_repos(pkgname):
     """
     Checks if a package exists in the official Arch Linux repositories.
     """
-    result = run_command(["pacman", "-Si", pkgname], check=False)
-    return result.returncode == 0
+    return find_provider_in_repos(pkgname) is not None

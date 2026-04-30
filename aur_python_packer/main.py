@@ -88,10 +88,10 @@ class Manager:
             if tier == "local":
                 pkg_dir = node_data["path"]
             elif tier == "aur":
-                pkg_dir = self.aur_client.clone_repo(pkg, self.aur_packages_dir)
+                pkg_dir = node_data.get("path")
                 if not pkg_dir:
-                    logger.error(f"Failed to clone AUR repo for {pkg}")
-                    self.state.update_package(pkg, "failed", "clone_error")
+                    logger.error(f"AUR package {pkg} has no source path")
+                    self.state.update_package(pkg, "failed", "missing_path")
                     break
             elif tier == "pypi":
                 pyname = node_data.get("pyname") or pkg.replace("python-", "")
