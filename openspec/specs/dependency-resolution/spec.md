@@ -2,35 +2,25 @@
 
 ## Purpose
 Calculates the full dependency tree for a target package and determines the optimal build order while ensuring no circular dependencies exist.
-
 ## Requirements
-
 ### Requirement: Multi-Tier Resolution
-The system SHALL resolve dependencies by searching through multiple sources in a defined priority order:
-1. **Local Repository**: Packages already built and present in the local database.
-2. **Official Repositories**: Packages available via `pacman` (Core, Extra, etc.).
-3. **AUR**: Arch User Repository for community-maintained PKGBUILDs.
-4. **PyPI**: Python Package Index for packages not yet in Arch-compatible format.
+The system SHALL resolve dependencies using a prioritized search sequence that accounts for local modifications and virtual package provisions.
 
-#### Scenario: Resolve from Local Repository
-- **GIVEN** a dependency exists in the local repository
-- **WHEN** searching for the package
-- **THEN** the system SHALL mark it as already available locally
+#### Search Sequence Order:
+1. **Newly Created Packages**: Search the `packages/` directory within the workspace.
+2. **Official Repositories**:
+   - First, search by package name.
+   - Second, search the "Provides" field of all repository packages.
+3. **AUR**:
+   - First, search the `aur_packages/` directory for local AUR clones.
+   - Second, search the AUR database via RPC.
+4. **PyPI**: Fallback to querying PyPI if not found in preceding tiers.
 
-#### Scenario: Resolve from Official Repositories
-- **GIVEN** a dependency exists in the official Arch repositories (e.g., `python-requests`)
-- **WHEN** searching for the package
-- **THEN** the system SHALL mark it as a system dependency to be installed via `pacman`
-
-#### Scenario: Resolve from AUR
-- **GIVEN** a dependency exists in the AUR (e.g., `python-some-aur-pkg`)
-- **WHEN** searching for the package
-- **THEN** the system SHALL fetch the PKGBUILD from AUR and add it to the build queue
-
-#### Scenario: Resolve from PyPI
-- **GIVEN** a dependency exists only on PyPI (e.g., `new-python-lib`)
-- **WHEN** searching for the package
-- **THEN** the system SHALL initiate the package generation process for an Arch-compatible PKGBUILD
+#### Scenario: Resolve via Provides field
+- **GIVEN** a package depends on `python-pyyaml`
+- **AND** `python-pyyaml` is not a package name but is provided by `python-yaml` in official repos
+- **WHEN** resolving the dependency
+- **THEN** the system SHALL resolve the dependency to `python-yaml`.
 
 ### Requirement: Build Order Calculation
 The system SHALL determine a build sequence that ensures all dependencies are built before the packages that require them.
@@ -47,6 +37,15 @@ The system SHALL detect and report any cycles in the dependency graph to prevent
 - **GIVEN** a circular dependency exists between packages
 - **WHEN** analyzing the graph
 - **THEN** the system SHALL raise an error and abort the process
+
+### Requirement: Early AUR Acquisition
+The system SHALL clone the AUR repository for a dependency immediately upon identifying it in the AUR database, ensuring the PKGBUILD is available for inspection before further resolution.
+
+#### Scenario: Immediate clone
+- **GIVEN** a dependency is found in the AUR RPC
+- **WHEN** the resolver identifies the package
+- **THEN** the system SHALL clone the repository into `aur_packages/`
+- **AND** it SHALL then use the local files in `aur_packages/` to continue dependency resolution.
 
 ## Implementation Notes
 - Searches Local, Official Repos, AUR, and PyPI.

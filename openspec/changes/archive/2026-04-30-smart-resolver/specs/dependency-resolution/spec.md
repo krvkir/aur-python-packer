@@ -1,8 +1,8 @@
 # Capability: Dependency Resolution (Refinement)
 
-## Requirements
+## MODIFIED Requirements
 
-### Requirement: Enhanced Multi-Tier Resolution
+### Requirement: Multi-Tier Resolution
 The system SHALL resolve dependencies using a prioritized search sequence that accounts for local modifications and virtual package provisions.
 
 #### Search Sequence Order:
@@ -20,6 +20,8 @@ The system SHALL resolve dependencies using a prioritized search sequence that a
 - **AND** `python-pyyaml` is not a package name but is provided by `python-yaml` in official repos
 - **WHEN** resolving the dependency
 - **THEN** the system SHALL resolve the dependency to `python-yaml`.
+
+## ADDED Requirements
 
 ### Requirement: Early AUR Acquisition
 The system SHALL clone the AUR repository for a dependency immediately upon identifying it in the AUR database, ensuring the PKGBUILD is available for inspection before further resolution.
