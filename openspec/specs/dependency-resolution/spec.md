@@ -47,6 +47,15 @@ The system SHALL clone the AUR repository for a dependency immediately upon iden
 - **THEN** the system SHALL clone the repository into `aur_packages/`
 - **AND** it SHALL then use the local files in `aur_packages/` to continue dependency resolution.
 
+
+### Requirement: Ad-hoc Dependency Injection
+The system SHALL support the injection of arbitrary dependencies into the build graph of a target package.
+
+#### Scenario: Injecting multiple dependencies
+- **GIVEN** a build request for `pkg-a`
+- **WHEN** the user provides `-d pkg-b -d pkg-c`
+- **THEN** the resolver SHALL treat `pkg-b` and `pkg-c` as direct dependencies of `pkg-a`.
+- **AND** it SHALL resolve `pkg-b` and `pkg-c` using the standard multi-tier search process.
 ## Implementation Notes
 - Searches Local, Official Repos, AUR, and PyPI.
 - Verifies exact name existence on PyPI.
