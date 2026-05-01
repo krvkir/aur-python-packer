@@ -27,8 +27,9 @@ def cli(ctx, work_dir):
 @click.argument("pkgname")
 @click.option("--path", "-P", multiple=True, help="Search paths for local PKGBUILDs")
 @click.option("--nocheck", is_flag=True, help="Skip package checks (tests)")
+@click.option("--depends", "-d", multiple=True, help="Extra dependencies to inject")
 @click.pass_context
-def build(ctx, pkgname, path, nocheck):
+def build(ctx, pkgname, path, nocheck, depends):
     """Build a package and its dependencies."""
     workdir = ctx.obj["work_dir"]
     log_path = setup_logging(workdir)
@@ -39,7 +40,7 @@ def build(ctx, pkgname, path, nocheck):
         mgr.resolver.search_paths = list(path)
 
     try:
-        mgr.build_all(pkgname, nocheck=nocheck)
+        mgr.build_all(pkgname, nocheck=nocheck, inject_depends=list(depends))
     except ValueError as e:
         click.secho(str(e), fg="red", err=True)
         ctx.exit(1)
@@ -88,6 +89,36 @@ def resolve(ctx, pkgname, path):
         extra = {k: v for k, v in node.items() if k not in ["tier", "version"]}
         if extra:
             print(f"  Metadata: {json.dumps(extra)}")
+
+
+@cli.command()
+@click.pass_context
+def git_init(ctx):
+    """Initialize Git repos in all package directories."""
+    workdir = ctx.obj["work_dir"]
+    log_path = setup_logging(workdir)
+    print(f"Logging to: {log_path}")
+
+    mgr = Manager(work_dir=workdir)
+    mgr.git_init_all()
+    print("Git repositories initialized.")
+
+
+@cli.command()
+@click.pass_context
+def git_show(ctx):
+    """Show package directories with uncommitted PKGBUILD changes."""
+    workdir = ctx.obj["work_dir"]
+    setup_logging(workdir)
+
+    mgr = Manager(work_dir=workdir)
+    changed = mgr.git_show_changed()
+    if changed:
+        print("Packages with uncommitted changes:")
+        for pkg in changed:
+            print(f"  - {pkg}")
+    else:
+        print("No packages with uncommitted changes.")
 
 
 @cli.command()
