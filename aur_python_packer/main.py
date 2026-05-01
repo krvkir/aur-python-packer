@@ -76,9 +76,7 @@ class Manager:
         # Inject extra dependencies into the graph
         if inject_depends:
             for dep in inject_depends:
-                logger.info(f"Injecting dependency: {dep} -> {target_pkg}")
-                self.resolver.resolve(dep)
-                self.resolver.graph.add_edge(target_pkg, dep)
+                self.resolver.inject_dependency(target_pkg, dep)
 
         order = self.resolver.get_build_order()
         logger.info(f"Build order: {' -> '.join(order)}")
@@ -267,13 +265,13 @@ class Manager:
                 if not os.path.exists(git_dir):
                     logger.debug(f"No git repo in {pkg_dir}, skipping.")
                     continue
-                result = self.run_in_sandbox(
+                result = run_command(
                     ["git", "diff", "--name-only", "HEAD", "--", "PKGBUILD"],
                     cwd=pkg_dir,
                     check=False,
                     log_level=logging.DEBUG,
                 )
-                if result and result.stdout.strip():
+                if result.returncode == 0 and result.stdout.strip():
                     changed.append(pkg_name)
         return changed
 
