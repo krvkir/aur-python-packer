@@ -127,13 +127,18 @@ class DependencyResolver:
 
         logger.debug(f"Resolving dependency: {pkgname}")
 
-        # Tier 1: Newly Created Packages
-        if self.packages_dir:
-            meta = self._find_in_dir(pkgname, self.packages_dir)
-            if meta:
-                logger.debug(f"Found {pkgname} in newly created packages")
-                self._add_to_graph(pkgname, meta, tier="local")
-                return
+        # Tier 1: Local Search (Newly Created or AUR Clones)
+        # We check self.packages_dir (tier: local) and self.aur_packages_dir (tier: aur)
+        for dir_path, tier_name in [
+            (self.packages_dir, "local"),
+            (self.aur_packages_dir, "aur"),
+        ]:
+            if dir_path:
+                meta = self._find_in_dir(pkgname, dir_path)
+                if meta:
+                    logger.debug(f"Found {pkgname} in {dir_path} (tier: {tier_name})")
+                    self._add_to_graph(pkgname, meta, tier=tier_name)
+                    return
 
         # Tier 2: Official Repositories
         provider = find_provider_in_repos(pkgname)
@@ -148,15 +153,7 @@ class DependencyResolver:
                 self.graph.add_node(pkgname, tier="repo")
             return
 
-        # Tier 3: AUR (Local Clones)
-        if self.aur_packages_dir:
-            meta = self._find_in_dir(pkgname, self.aur_packages_dir)
-            if meta:
-                logger.debug(f"Found {pkgname} in local AUR clones")
-                self._add_to_graph(pkgname, meta, tier="aur")
-                return
-
-        # Tier 4: AUR (Remote RPC + Clone)
+        # Tier 3: AUR (Remote RPC + Clone)
         aur_meta = self.aur_client.get_info(pkgname)
         if aur_meta:
             logger.info(f"Found {pkgname} in AUR, cloning immediately...")
@@ -185,7 +182,7 @@ class DependencyResolver:
                 self.resolve(dep_name)
             return
 
-        # Tier 5: PyPI
+        # Tier 4: PyPI
         pyname = pkgname
         if pkgname.startswith("python-"):
             pyname = pkgname[7:]

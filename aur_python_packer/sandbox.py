@@ -31,7 +31,7 @@ class Sandbox:
         uid = os.getuid()
         gid = os.getgid()
         username = os.getlogin()
-        home_dir = os.path.join(self.work_dir, "home", username)
+        home_dir = os.path.join(self.srv_dir, "home", username)
         os.makedirs(home_dir, exist_ok=True)
 
         nproc = os.cpu_count() or 1
@@ -94,7 +94,8 @@ class Sandbox:
         bwrap_cmd = self.get_bwrap_command(
             cmd, cwd, custom_conf, pacman_db_path, share_net=share_net
         )
-        return run_command(bwrap_cmd, log_level=log_level, check=check)
+        summary = f"[Sandbox{': shared-net' if share_net else ''}] {' '.join(cmd)}"
+        return run_command(bwrap_cmd, log_level=log_level, check=check, msg=summary)
 
     def run_host_command(self, cmd, log_level=logging.DEBUG, check=True):
         """
@@ -117,7 +118,8 @@ class Sandbox:
         ]
         # fmt: on
         bwrap_cmd.extend(cmd)
-        return run_command(bwrap_cmd, log_level=log_level, check=check)
+        summary = f"[Host-root] {' '.join(cmd)}"
+        return run_command(bwrap_cmd, log_level=log_level, check=check, msg=summary)
 
     def generate_shims(self, custom_conf, pacman_db_path):
         """

@@ -28,8 +28,9 @@ def cli(ctx, work_dir):
 @click.option("--path", "-P", multiple=True, help="Search paths for local PKGBUILDs")
 @click.option("--nocheck", is_flag=True, help="Skip package checks (tests)")
 @click.option("--depends", "-d", multiple=True, help="Extra dependencies to inject")
+@click.option("--show-repo-deps", is_flag=True, help="Show repository dependencies in the graph")
 @click.pass_context
-def build(ctx, pkgname, path, nocheck, depends):
+def build(ctx, pkgname, path, nocheck, depends, show_repo_deps):
     """Build a package and its dependencies."""
     workdir = ctx.obj["work_dir"]
     log_path = setup_logging(workdir)
@@ -40,7 +41,7 @@ def build(ctx, pkgname, path, nocheck, depends):
         mgr.resolver.search_paths = list(path)
 
     try:
-        mgr.build_all(pkgname, nocheck=nocheck, inject_depends=list(depends))
+        mgr.build_all(pkgname, nocheck=nocheck, inject_depends=list(depends), show_repo_deps=show_repo_deps)
     except ValueError as e:
         click.secho(str(e), fg="red", err=True)
         ctx.exit(1)
@@ -49,8 +50,9 @@ def build(ctx, pkgname, path, nocheck, depends):
 @cli.command()
 @click.argument("pkgname")
 @click.option("--path", "-P", multiple=True, help="Search paths for local PKGBUILDs")
+@click.option("--show-repo-deps", is_flag=True, help="Show repository dependencies in the graph")
 @click.pass_context
-def resolve(ctx, pkgname, path):
+def resolve(ctx, pkgname, path, show_repo_deps):
     """Resolve dependencies for a package and print details."""
     workdir = ctx.obj["work_dir"]
     setup_logging(workdir)
@@ -66,7 +68,7 @@ def resolve(ctx, pkgname, path):
         click.secho(str(e), fg="red", err=True)
         ctx.exit(1)
 
-    print_dependency_graph(mgr.resolver.graph, mgr.state)
+    print_dependency_graph(mgr.resolver.graph, mgr.state, show_repo_deps=show_repo_deps)
 
     order = mgr.resolver.get_build_order()
 
@@ -112,12 +114,15 @@ def git_show(ctx):
     setup_logging(workdir)
 
     mgr = Manager(work_dir=workdir)
-    changed = mgr.git_show_changed()
-    if changed:
-        print("Packages with uncommitted changes:")
-        for pkg in changed:
-            print(f"  - {pkg}")
-    else:
+    print("Checking for uncommitted changes...")
+    any_changed = False
+    for pkg in mgr.git_show_changed():
+        if not any_changed:
+            print("Packages with uncommitted changes:")
+            any_changed = True
+        print(f"  - {pkg}")
+
+    if not any_changed:
         print("No packages with uncommitted changes.")
 
 

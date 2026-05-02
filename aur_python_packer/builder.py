@@ -108,7 +108,6 @@ class Builder:
         if nocheck:
             cmd.append("--nocheck")
 
-        logger.info(f"Starting sandboxed build for {pkgname}...")
         # Ensure the build user can write to the directory
         # In the sandbox we are root (uid 0), and we mapped our current user to uid 0.
         # So we should have permission.

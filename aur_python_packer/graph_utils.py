@@ -3,7 +3,7 @@ import click
 import networkx as nx
 import dagviz
 
-def print_dependency_graph(graph: nx.DiGraph, state_manager):
+def print_dependency_graph(graph: nx.DiGraph, state_manager, show_repo_deps=False):
     """
     Prints the dependency graph with status annotations and colors.
     
@@ -14,10 +14,20 @@ def print_dependency_graph(graph: nx.DiGraph, state_manager):
     Args:
         graph: networkx.DiGraph representing the dependency tree.
         state_manager: StateManager instance to check package status.
+        show_repo_deps: If False, omit 'repo' tier nodes if total nodes > 20.
     """
+    # Filtering logic
+    display_graph = graph
+    omitted_count = 0
+    if not show_repo_deps and len(graph.nodes) > 20:
+        repo_nodes = [n for n, d in graph.nodes(data=True) if d.get("tier") == "repo"]
+        omitted_count = len(repo_nodes)
+        if omitted_count > 0:
+            display_graph = graph.subgraph([n for n in graph.nodes if n not in repo_nodes])
+
     # Create a mapping for labels
     labels = {}
-    for node, data in graph.nodes(data=True):
+    for node, data in display_graph.nodes(data=True):
         tier = data.get("tier", "")
         pkg_state = state_manager.get_package(node)
         
@@ -36,7 +46,7 @@ def print_dependency_graph(graph: nx.DiGraph, state_manager):
         labels[node] = label
     
     # Create a temporary graph with relabeled nodes for visualization
-    relabeled_graph = nx.relabel_nodes(graph, labels)
+    relabeled_graph = nx.relabel_nodes(display_graph, labels)
     
     # Render to string using dagviz
     try:
@@ -83,3 +93,8 @@ def print_dependency_graph(graph: nx.DiGraph, state_manager):
 
     click.echo("\nDependency Graph:")
     click.echo(graph_str)
+
+    if omitted_count > 0:
+        click.echo(
+            f"Note: Omitted {omitted_count} repository dependencies from visualization. Use --show-repo-deps to see full graph."
+        )

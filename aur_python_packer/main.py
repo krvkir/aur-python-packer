@@ -62,7 +62,7 @@ class Manager:
         self.aur_client = AURClient()
         self.metadata_parser = MetadataParser()
 
-    def build_all(self, target_pkg, nocheck=False, inject_depends=None):
+    def build_all(self, target_pkg, nocheck=False, inject_depends=None, show_repo_deps=False):
         """
         Resolves and builds the specified target package and all its dependencies
         in the correct order.
@@ -84,7 +84,7 @@ class Manager:
         injected = list(inject_depends) if inject_depends else []
 
         # Show initial graph
-        print_dependency_graph(self.resolver.graph, self.state)
+        print_dependency_graph(self.resolver.graph, self.state, show_repo_deps=show_repo_deps)
 
         for pkg in order:
             node_data = self.resolver.graph.nodes[pkg]
@@ -178,7 +178,7 @@ class Manager:
                     logger.info(f"Successfully built and added {pkg}")
 
                     # Show updated graph
-                    print_dependency_graph(self.resolver.graph, self.state)
+                    print_dependency_graph(self.resolver.graph, self.state, show_repo_deps=show_repo_deps)
                 except Exception as e:
                     logger.error(f"Failed to build {pkg}: {e}")
                     self.state.update_package(pkg, version, "failed")
@@ -218,21 +218,40 @@ class Manager:
         pkg_name = os.path.basename(pkg_dir)
         logger.info(f"Initializing git repo in {pkg_dir}")
 
+        # Fetch host git identity
+        user_name = "AUR Packer"
+        user_email = "aur-packer@localhost"
+
+        try:
+            res_name = subprocess.run(
+                ["git", "config", "--global", "user.name"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if res_name.returncode == 0 and res_name.stdout.strip():
+                user_name = res_name.stdout.strip()
+
+            res_email = subprocess.run(
+                ["git", "config", "--global", "user.email"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if res_email.returncode == 0 and res_email.stdout.strip():
+                user_email = res_email.stdout.strip()
+        except Exception as e:
+            logger.debug(f"Failed to fetch host git identity: {e}")
+
         # Configure git user
         self.run_in_sandbox(
-            [
-                "git",
-                "config",
-                "--global",
-                "user.email",
-                "aur-packer@localhost",
-            ],
+            ["git", "config", "--global", "user.email", user_email],
             cwd=pkg_dir,
             check=False,
             log_level=logging.DEBUG,
         )
         self.run_in_sandbox(
-            ["git", "config", "--global", "user.name", "AUR Packer"],
+            ["git", "config", "--global", "user.name", user_name],
             cwd=pkg_dir,
             check=False,
             log_level=logging.DEBUG,
@@ -251,9 +270,8 @@ class Manager:
         )
 
     def git_show_changed(self):
-        """Return list of package names with uncommitted PKGBUILD changes."""
+        """Yield package names with uncommitted PKGBUILD changes."""
         logger.info("Checking for uncommitted changes...")
-        changed = []
         for base_dir in [self.packages_dir, self.aur_packages_dir]:
             if not os.path.isdir(base_dir):
                 continue
@@ -272,8 +290,7 @@ class Manager:
                     log_level=logging.DEBUG,
                 )
                 if result.returncode == 0 and result.stdout.strip():
-                    changed.append(pkg_name)
-        return changed
+                    yield pkg_name
 
     def run_in_sandbox(
         self, command, cwd=None, log_level=logging.INFO, check=True, share_net=False
@@ -294,7 +311,6 @@ class Manager:
         else:
             cmd_list = command
 
-        logger.info(f"Executing in sandbox: {' '.join(cmd_list)}")
         return self.builder._run_in_sandbox(
             cmd_list,
             cwd=os.path.abspath(cwd),

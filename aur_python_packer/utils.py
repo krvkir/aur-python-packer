@@ -13,11 +13,13 @@ class CommandResult:
 logger = logging.getLogger(__name__)
 
 
-def run_command(cmd, cwd=None, env=None, check=True, log_level=logging.DEBUG):
+def run_command(cmd, cwd=None, env=None, check=True, log_level=logging.DEBUG, msg=None):
     """
     Executes a command, logs its merged output (stdout/stderr) in real-time.
     Logs the command and any environment overrides at DEBUG level.
     """
+    if msg:
+        logger.info(msg)
     logger.debug(f"Executing command: {' '.join(cmd)}")
     effective_cwd = cwd if cwd else os.getcwd()
     logger.debug(f"CWD: {effective_cwd}")
