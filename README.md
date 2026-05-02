@@ -2,6 +2,46 @@
 
 Automated AUR Package Lifecycle Manager for Python.
 
+``` bash
+$ poetry run aur-python-packer resolve jupyter-ai         
+Resolving dependencies for jupyter-ai...
+
+Dependency Graph:
+• jupyter-ai
+└─• python-jupyter-ai (local) [built]
+  ├─• python-jupyter-server-mcp (local) [built]
+  │ └─• python-fastmcp (local) [built]
+  │   ├─• python-py-key-value-aio (local) [built]
+  │   │ └─• python-beartype (aur) [built]
+  │   ├─• python-griffelib (aur) [built]
+  │   ├─│─• python-mcp (aur) [built]
+  │   │ │ ├─• python-sse-starlette (aur) [built (no checks)]
+  │   │ │ ├─• python-httpx-sse (aur) [built]
+  │   ├─┴─┴─• python-uv-dynamic-versioning (aur) [built]
+  │   ├─• python-openapi-pydantic (aur) [built]
+  │   ├─• python-cyclopts (aur) [built]
+  │   │ ├─• python-docstring-parser (aur) [built]
+  │   │ └─• python-rich-rst (aur) [built]
+  │   ├─• python-jsonref (aur) [built]
+  │   │ └─• python-pdm-pep517 (aur) [built]
+  │   └─• python-uncalled-for (aur) [built]
+  ├─• python-jupyter-ai-acp-client (local) [built]
+  ├─│─• python-jupyter-ai-chat-commands (local) [built]
+  │ ├─│─• python-agent-client-protocol (aur) [built]
+  ├─┼─┼─• python-jupyter-ai-persona-manager (local) [built]
+  ├─│─┼─┼─• python-jupyter-ai-router (local) [built]
+  ├─┴─┴─┴─┴─• python-jupyterlab-chat (local) [built]
+  │         ├─• python-rfc3987-syntax (local) [built]
+  │         └─• python-bleach-git (local) [built]
+  ├─• python-jupyter-server-documents (local) [built]
+  ├─• python-jupyterlab-commands-toolkit (local) [built]
+  │ └─• python-jupyterlab-eventlistener (local) [built]
+  ├─• python-jupyterlab-notebook-awareness (local) [built]
+  └─• python-jupyter-ai-tools (local) [built]
+Note: Omitted 73 repository dependencies from visualization. Use --show-repo-deps to see full graph.
+
+```
+
 ## The Problem
 Managing Python packages on Arch Linux often requires a mix of official repositories, AUR packages, and occasionally generating new ones from PyPI. Keeping track of recursive dependencies across these tiers, building them in clean environments, and maintaining a local repository for subsequent builds is a manual and error-prone process.
 
