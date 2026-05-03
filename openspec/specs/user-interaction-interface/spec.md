@@ -25,6 +25,7 @@ The system SHALL organize the workspace directory into a standardized set of sub
   - `work/local_repo/`: For the pacman repository database and built packages.
   - `work/logs/`: For diagnostic logs.
   - `work/srv/`: For internal tool state and the build sandbox.
+  - `work/srv/home/`: For the sandboxed user home directory.
   - `work/pypi_mapping.json`: For dependency name mapping.
 
 ### Requirement: Workspace State Isolation
@@ -44,14 +45,24 @@ The system SHALL provide the user with clear information about the location of d
 - **THEN** it SHALL display a notification like `Logs: logs/run_20231027_103000.log` to the user
 
 ### Requirement: Dependency Graph Visualization
-The system SHALL provide a graphical representation of the dependency DAG (Directed Acyclic Graph) to allow users to visualize complex relationships and build status during the resolution process.
+The system SHALL provide a graphical representation of the dependency DAG (Directed Acyclic Graph) to allow users to visualize complex relationships and build status during the resolution process. To prevent terminal clutter, repository-tier dependencies SHALL be omitted from large graphs by default.
 
-#### Scenario: Visualizing dependency DAG
-- **GIVEN** a package with dependencies
-- **WHEN** the user resolves dependencies
-- **THEN** the system SHALL output an ASCII/Unicode DAG visualization
-- **AND** it SHALL highlight nodes that are already successfully built
-- **AND** it SHALL support ANSI colors in interactive terminals while ensuring they are stripped for non-TTY output
+#### Scenario: Visualizing small dependency DAG
+- **GIVEN** a dependency graph with 20 or fewer total nodes
+- **WHEN** the user resolves dependencies or builds a package
+- **THEN** the system SHALL output a complete DAG visualization including all tiers
+
+#### Scenario: Visualizing large dependency DAG
+- **GIVEN** a dependency graph with more than 20 total nodes
+- **WHEN** the user resolves dependencies or builds a package
+- **THEN** the system SHALL omit nodes belonging to the "repo" (official repositories) tier from the visualization
+- **AND** it SHALL display a notice indicating the number of omitted dependencies
+
+#### Scenario: Visualizing large dependency DAG with override
+- **GIVEN** a dependency graph with more than 20 total nodes
+- **AND** the `--show-repo-deps` flag is provided
+- **WHEN** the user resolves dependencies or builds a package
+- **THEN** the system SHALL output a complete DAG visualization including all repository dependencies
 
 ### Requirement: Real-time Build Progress Visualization
 The system SHALL display the dependency graph during the build process to provide real-time updates on progress and status.
@@ -75,13 +86,15 @@ The system SHALL gracefully report when a package or its dependencies cannot be 
 ### Requirement: Package Source Version Control
 The system SHALL provide built-in Git integration to track manual modifications to package source files using the `git` tool available in the chroot environment.
 
-#### Scenario: Initialize tracking
+#### Scenario: Initialize tracking with host identity
 - **WHEN** the `git-init` command is executed
-- **THEN** the system SHALL initialize Git repositories in all directories within `packages/` and `aur_packages/` if they are not already repositories.
+- **THEN** the system SHALL initialize Git repositories in all directories within `packages/` and `aur_packages/` if they are not already repositories
+- **AND** it SHALL configure the repository `user.name` and `user.email` using the values from the host system's global Git configuration
 
-#### Scenario: Identify manual changes
+#### Scenario: Identify manual changes with streaming output
 - **WHEN** the `git-show` command is executed
-- **THEN** the system SHALL list all package directories containing uncommitted changes to the `PKGBUILD`.
+- **THEN** the system SHALL identify package directories containing uncommitted changes to the `PKGBUILD`
+- **AND** it SHALL print each identified package to the terminal immediately upon discovery rather than waiting for the entire scan to complete
 
 ### Requirement: Flexible Dependency Injection
 The system SHALL allow users to explicitly add dependencies to a package build at runtime without modifying the `PKGBUILD` source.
