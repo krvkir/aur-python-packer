@@ -29,13 +29,13 @@ def cli(ctx, work_dir, maintainer):
 
 
 @cli.command()
-@click.argument("pkgname")
+@click.argument("pkgnames", nargs=-1, required=True)
 @click.option("--path", "-P", multiple=True, help="Search paths for local PKGBUILDs")
 @click.option("--nocheck", is_flag=True, help="Skip package checks (tests)")
 @click.option("--depends", "-d", multiple=True, help="Extra dependencies to inject")
 @click.option("--show-repo-deps", is_flag=True, help="Show repository dependencies in the graph")
 @click.pass_context
-def build(ctx, pkgname, path, nocheck, depends, show_repo_deps):
+def build(ctx, pkgnames, path, nocheck, depends, show_repo_deps):
     """Build a package and its dependencies."""
     workdir = ctx.obj["work_dir"]
     log_path = setup_logging(workdir)
@@ -46,18 +46,18 @@ def build(ctx, pkgname, path, nocheck, depends, show_repo_deps):
         mgr.resolver.search_paths = list(path)
 
     try:
-        mgr.build_all(pkgname, nocheck=nocheck, inject_depends=list(depends), show_repo_deps=show_repo_deps)
+        mgr.build_all(pkgnames, nocheck=nocheck, inject_depends=list(depends), show_repo_deps=show_repo_deps)
     except ValueError as e:
         click.secho(str(e), fg="red", err=True)
         ctx.exit(1)
 
 
 @cli.command()
-@click.argument("pkgname")
+@click.argument("pkgnames", nargs=-1, required=True)
 @click.option("--path", "-P", multiple=True, help="Search paths for local PKGBUILDs")
 @click.option("--show-repo-deps", is_flag=True, help="Show repository dependencies in the graph")
 @click.pass_context
-def resolve(ctx, pkgname, path, show_repo_deps):
+def resolve(ctx, pkgnames, path, show_repo_deps):
     """Resolve dependencies for a package and print details."""
     workdir = ctx.obj["work_dir"]
     setup_logging(workdir)
@@ -66,12 +66,13 @@ def resolve(ctx, pkgname, path, show_repo_deps):
     if path:
         mgr.resolver.search_paths = list(path)
 
-    print(f"Resolving dependencies for {pkgname}...")
-    try:
-        mgr.resolver.resolve(pkgname)
-    except ValueError as e:
-        click.secho(str(e), fg="red", err=True)
-        ctx.exit(1)
+    for pkgname in pkgnames:
+        print(f"Resolving dependencies for {pkgname}...")
+        try:
+            mgr.resolver.resolve(pkgname)
+        except ValueError as e:
+            click.secho(str(e), fg="red", err=True)
+            ctx.exit(1)
 
     print_dependency_graph(mgr.resolver.graph, mgr.state, show_repo_deps=show_repo_deps)
 

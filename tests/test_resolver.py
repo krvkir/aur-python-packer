@@ -51,11 +51,13 @@ def test_resolve_cascade(mock_clone, mock_find_in_dir, mock_aur, mock_repo):
     # 1. packages/aur-pkg
     # 2. aur_packages/aur-pkg (initial check)
     # 3. aur_packages/aur-pkg (after clone check)
-    # 4. packages/pacman (when resolving dependency)
+    # 4. packages/pacman (when resolving dependency - checked in packages_dir)
+    # 5. aur_packages/pacman (when resolving dependency - checked in aur_packages_dir)
     mock_find_in_dir.side_effect = [
         None,
         None,
         {"path": "aur_packages/aur-pkg", "depends": ["pacman"], "version": "1.0"},
+        None,
         None,
     ]
 

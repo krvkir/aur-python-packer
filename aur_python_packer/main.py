@@ -64,24 +64,28 @@ class Manager:
         self.aur_client = AURClient()
         self.metadata_parser = MetadataParser()
 
-    def build_all(self, target_pkg, nocheck=False, inject_depends=None, show_repo_deps=False):
+    def build_all(self, target_pkgs, nocheck=False, inject_depends=None, show_repo_deps=False):
         """
-        Resolves and builds the specified target package and all its dependencies
+        Resolves and builds the specified target packages and all their dependencies
         in the correct order.
 
         If inject_depends is provided, those deps are added to the target's graph
         as dependency edges, resolved through the standard 4-tier process.
         """
-        logger.info(f"Resolving dependencies for {target_pkg}...")
-        self.resolver.resolve(target_pkg)
+        if isinstance(target_pkgs, str):
+            target_pkgs = [target_pkgs]
 
-        # Inject extra dependencies into the graph
-        if inject_depends:
-            for dep in inject_depends:
-                self.resolver.inject_dependency(target_pkg, dep)
+        for pkg in target_pkgs:
+            logger.info(f"Resolving dependencies for {pkg}...")
+            self.resolver.resolve(pkg)
+
+            # Inject extra dependencies into the graph for each target
+            if inject_depends:
+                for dep in inject_depends:
+                    self.resolver.inject_dependency(pkg, dep)
 
         order = self.resolver.get_build_order()
-        logger.info(f"Build order: {' -> '.join(order)}")
+        logger.info(f"Total build order: {' -> '.join(order)}")
 
         injected = list(inject_depends) if inject_depends else []
 
@@ -175,7 +179,7 @@ class Manager:
                         version,
                         "success",
                         skipped_checks=skipped,
-                        injected_depends=injected if pkg == target_pkg else None,
+                        injected_depends=injected if pkg in target_pkgs else None,
                     )
                     logger.info(f"Successfully built and added {pkg}")
 

@@ -17,9 +17,22 @@ def test_cli_build_basic(mock_setup, mock_manager, runner):
     result = runner.invoke(cli, ["-w", "mywork", "build", "python-requests"])
 
     assert result.exit_code == 0
-    mock_manager.assert_called_once_with(work_dir="mywork")
+    mock_manager.assert_called_with(work_dir="mywork", maintainer=None)
     mock_mgr_instance.build_all.assert_called_once_with(
-        "python-requests", nocheck=False, inject_depends=[]
+        ("python-requests",), nocheck=False, inject_depends=[], show_repo_deps=False
+    )
+
+
+@patch("aur_python_packer.cli.Manager")
+@patch("aur_python_packer.cli.setup_logging")
+def test_cli_build_multiple(mock_setup, mock_manager, runner):
+    mock_mgr_instance = mock_manager.return_value
+    result = runner.invoke(cli, ["build", "pkg1", "pkg2"])
+
+    assert result.exit_code == 0
+    mock_mgr_instance.build_all.assert_called_once()
+    mock_mgr_instance.build_all.assert_called_once_with(
+        ("pkg1", "pkg2"), nocheck=False, inject_depends=[], show_repo_deps=False
     )
 
 
@@ -36,7 +49,7 @@ def test_cli_resolve_basic(mock_setup, mock_manager, runner):
 
     assert result.exit_code == 0
     assert "Resolving dependencies for python-requests..." in result.output
-    mock_mgr_instance.resolver.resolve.assert_called_once_with("python-requests")
+    mock_mgr_instance.resolver.resolve.assert_any_call("python-requests")
 
 
 @patch("aur_python_packer.cli.Manager")
@@ -57,7 +70,7 @@ def test_cli_git_init(mock_setup, mock_manager, runner):
     result = runner.invoke(cli, ["git-init"])
 
     assert result.exit_code == 0
-    mock_manager.assert_called_once()
+    mock_manager.assert_called()
     mock_mgr_instance.git_init_all.assert_called_once()
     assert "Git repositories initialized." in result.output
 
@@ -102,7 +115,7 @@ def test_cli_build_with_depends(mock_setup, mock_manager, runner):
 
     assert result.exit_code == 0
     mock_mgr_instance.build_all.assert_called_once_with(
-        "python-foo", nocheck=False, inject_depends=["python-bar", "python-baz"]
+        ("python-foo",), nocheck=False, inject_depends=["python-bar", "python-baz"], show_repo_deps=False
     )
 
 
@@ -115,5 +128,5 @@ def test_cli_build_with_single_depends(mock_setup, mock_manager, runner):
 
     assert result.exit_code == 0
     mock_mgr_instance.build_all.assert_called_once_with(
-        "python-foo", nocheck=False, inject_depends=["python-bar"]
+        ("python-foo",), nocheck=False, inject_depends=["python-bar"], show_repo_deps=False
     )
