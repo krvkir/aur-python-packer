@@ -66,7 +66,7 @@ class Manager:
 
     def build_all(self, target_pkgs, nocheck=False, inject_depends=None, show_repo_deps=False):
         """
-        Resolves and builds the specified target packages and all their dependencies
+        Resolves and builds the specified target packages and all its dependencies
         in the correct order.
 
         If inject_depends is provided, those deps are added to the target's graph

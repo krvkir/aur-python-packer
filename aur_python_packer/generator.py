@@ -79,17 +79,34 @@ class PyPIGenerator:
 
         norm_license = self.normalize_license(meta)
 
+        source_url = ""
+        src_folder = f"{pyname}-{meta['version']}" # Fallback
+
+        if release_info:
+            if "filename" in release_info:
+                filename = release_info["filename"]
+                # Determine src_folder by stripping extensions
+                src_folder = filename
+                for ext in [".tar.gz", ".tar.bz2", ".tar.xz", ".zip"]:
+                    if filename.endswith(ext):
+                        src_folder = filename[:-len(ext)]
+                        break
+                # Construct stable URL
+                source_url = f"https://files.pythonhosted.org/packages/source/{pyname[0]}/{pyname}/{filename}"
+            else:
+                source_url = release_info["url"]
+
         pkg_data = {
             "maintainer": self.maintainer,
             "pkgname": f"python-{pyname.lower()}",
             "pyname": pyname,
             "pkgver": meta["version"],
-            # Heuristic: ensure summary is single-line to avoid breaking PKGBUILD
             "pkgdesc": meta["summary"],
             "url": meta.get("home_page") or f"https://pypi.org/project/{pyname}/",
             "license": norm_license,
             "sha256": "SKIP", # Will be updated by updpkgsums
-            "source_url": release_info["url"] if release_info else "",
+            "source_url": source_url,
+            "src_folder": src_folder,
             "depends": depends or [],
             "makedepends": makedepends,
         }

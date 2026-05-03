@@ -51,7 +51,10 @@ class PyPIClient:
             # We only care about source distributions (sdist) for PKGBUILDs
             for release in data["urls"]:
                 if release["packagetype"] == "sdist":
-                    return {"url": release["url"]}
+                    return {
+                        "url": release["url"],
+                        "filename": release["filename"]
+                    }
         except Exception as e:
             logger.debug(f"Failed to fetch PyPI release info for {pyname}=={version}: {e}")
         return None
