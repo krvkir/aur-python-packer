@@ -1,3 +1,4 @@
+# Maintainer: {{ maintainer }}
 pkgname={{ pkgname }}
 _name={{ pyname }}
 pkgver={{ pkgver }}
@@ -8,15 +9,16 @@ url="{{ url }}"
 license=('{{ license }}')
 depends=({% for dep in depends %}'{{ dep }}' {% endfor %})
 makedepends=({% for dep in makedepends %}'{{ dep }}' {% endfor %})
-source=("{{ source_url }}")
+source=("https://files.pythonhosted.org/packages/source/${_name::1}/${_name}/${_name}-$pkgver.tar.gz")
 sha256sums=('{{ sha256 }}')
 
 build() {
-    cd "$srcdir"/*-"$pkgver"
+    cd "${_name}-${pkgver}"
     python -m build --wheel --no-isolation
 }
 
 package() {
-    cd "$srcdir"/*-"$pkgver"
+    cd "${_name}-${pkgver}"
     python -m installer --destdir="$pkgdir" dist/*.whl
+    install -Dm644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgname/"
 }

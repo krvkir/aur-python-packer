@@ -9,7 +9,7 @@ from aur_python_packer.graph_utils import print_dependency_graph
 from aur_python_packer.repo import RepoManager
 from aur_python_packer.resolver import DependencyResolver
 from aur_python_packer.state import StateManager
-from aur_python_packer.utils import run_command
+from aur_python_packer.utils import run_command, get_git_identity
 from aur_python_packer.clients import AURClient
 from aur_python_packer.metadata import MetadataParser
 
@@ -22,9 +22,11 @@ class Manager:
     Coordinates dependency resolution, package generation, and sandboxed building.
     """
 
-    def __init__(self, work_dir="work"):
+    def __init__(self, work_dir="work", maintainer=None):
         self.work_dir = os.path.abspath(work_dir)
         os.makedirs(self.work_dir, exist_ok=True)
+
+        self.maintainer = maintainer or get_git_identity()
 
         self.srv_dir = os.path.join(self.work_dir, "srv")
         self.state_file = os.path.join(self.srv_dir, "build_index.json")
@@ -58,7 +60,7 @@ class Manager:
         self.resolver = DependencyResolver(
             self.work_dir, search_paths=[self.packages_dir, self.aur_packages_dir]
         )
-        self.generator = PyPIGenerator()
+        self.generator = PyPIGenerator(maintainer=self.maintainer)
         self.aur_client = AURClient()
         self.metadata_parser = MetadataParser()
 

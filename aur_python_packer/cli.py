@@ -16,11 +16,16 @@ from aur_python_packer.main import Manager
     type=click.Path(file_okay=False),
     help="Base directory for all tool state and artifacts.",
 )
+@click.option(
+    "--maintainer",
+    help="Maintainer identity for PKGBUILDs (e.g., 'Name <email>').",
+)
 @click.pass_context
-def cli(ctx, work_dir):
+def cli(ctx, work_dir, maintainer):
     """AUR Python Packer - Automate AUR package builds."""
     ctx.ensure_object(dict)
     ctx.obj["work_dir"] = work_dir
+    ctx.obj["maintainer"] = maintainer
 
 
 @cli.command()
@@ -36,7 +41,7 @@ def build(ctx, pkgname, path, nocheck, depends, show_repo_deps):
     log_path = setup_logging(workdir)
     print(f"Logging to: {log_path}")
 
-    mgr = Manager(work_dir=workdir)
+    mgr = Manager(work_dir=workdir, maintainer=ctx.obj.get("maintainer"))
     if path:
         mgr.resolver.search_paths = list(path)
 
@@ -57,7 +62,7 @@ def resolve(ctx, pkgname, path, show_repo_deps):
     workdir = ctx.obj["work_dir"]
     setup_logging(workdir)
 
-    mgr = Manager(work_dir=workdir)
+    mgr = Manager(work_dir=workdir, maintainer=ctx.obj.get("maintainer"))
     if path:
         mgr.resolver.search_paths = list(path)
 
@@ -101,7 +106,7 @@ def git_init(ctx):
     log_path = setup_logging(workdir)
     print(f"Logging to: {log_path}")
 
-    mgr = Manager(work_dir=workdir)
+    mgr = Manager(work_dir=workdir, maintainer=ctx.obj.get("maintainer"))
     mgr.git_init_all()
     print("Git repositories initialized.")
 
@@ -113,7 +118,7 @@ def git_show(ctx):
     workdir = ctx.obj["work_dir"]
     setup_logging(workdir)
 
-    mgr = Manager(work_dir=workdir)
+    mgr = Manager(work_dir=workdir, maintainer=ctx.obj.get("maintainer"))
     print("Checking for uncommitted changes...")
     any_changed = False
     for pkg in mgr.git_show_changed():
@@ -136,7 +141,7 @@ def cmd(ctx, command, cwd):
     log_path = setup_logging(workdir)
     print(f"Logging to: {log_path}")
 
-    mgr = Manager(work_dir=workdir)
+    mgr = Manager(work_dir=workdir, maintainer=ctx.obj.get("maintainer"))
     mgr.run_in_sandbox(command, cwd=cwd or workdir, check=False)
 
 

@@ -11,7 +11,7 @@ class PyPIGenerator:
     Generates Arch Linux PKGBUILDs for Python packages using PyPI metadata
     and Jinja2 templates.
     """
-    def __init__(self):
+    def __init__(self, maintainer="AUR Packer <aur-packer@localhost>"):
         self.env = Environment(
             loader=PackageLoader("aur_python_packer", "templates"),
             autoescape=select_autoescape()
@@ -19,6 +19,7 @@ class PyPIGenerator:
         self.template = self.env.get_template("PKGBUILD.j2")
         self.pypi_client = PyPIClient()
         self.metadata_parser = MetadataParser()
+        self.maintainer = maintainer
 
     def render(self, meta):
         """
@@ -31,17 +32,30 @@ class PyPIGenerator:
         Heuristic to normalize PyPI license strings/classifiers to SPDX identifiers
         or common Arch Linux license names.
         """
+        # Mapping for common license strings
+        mapping = {
+            "Apache Software License": "Apache-2.0",
+            "MIT License": "MIT",
+            "BSD License": "BSD-3-Clause",
+        }
+
         # Priority 1: Check standard license classifiers
         for c in meta.get("classifiers", []):
             if c.startswith("License :: OSI Approved :: "):
                 l = c.split(" :: ")[-1]
                 logger.debug(f"Applying license heuristic (classifier): {l}")
-                if "BSD License" in l: return "BSD-3-Clause"
-                if "MIT License" in l: return "MIT"
-                if "Apache Software License" in l: return "Apache-2.0"
+                for key, value in mapping.items():
+                    if key in l:
+                        return value
 
         # Priority 2: Use the free-text license field
         l = meta.get("license", "None")
+
+        # Check mapping in free-text field
+        for key, value in mapping.items():
+            if key in l:
+                return value
+
         # Heuristic: if it's very long or contains newlines, it's likely a license text,
         # not a name. Mark it as 'custom' unless we can find a keyword.
         if len(l) > 100 or "\n" in l:
@@ -66,12 +80,13 @@ class PyPIGenerator:
         norm_license = self.normalize_license(meta)
 
         pkg_data = {
+            "maintainer": self.maintainer,
             "pkgname": f"python-{pyname.lower()}",
             "pyname": pyname,
             "pkgver": meta["version"],
             # Heuristic: ensure summary is single-line to avoid breaking PKGBUILD
             "pkgdesc": meta["summary"],
-            "url": meta["home_page"],
+            "url": meta.get("home_page") or f"https://pypi.org/project/{pyname}/",
             "license": norm_license,
             "sha256": "SKIP", # Will be updated by updpkgsums
             "source_url": release_info["url"] if release_info else "",

@@ -59,3 +59,35 @@ def run_command(cmd, cwd=None, env=None, check=True, log_level=logging.DEBUG, ms
         )
 
     return CommandResult(stdout="\n".join(output_lines), returncode=return_code)
+
+
+def get_git_identity():
+    """
+    Returns a string "Name <email>" from git config --global user.name and user.email.
+    Fallback to "AUR Packer <aur-packer@localhost>".
+    """
+    name = "AUR Packer"
+    email = "aur-packer@localhost"
+
+    try:
+        res_name = subprocess.run(
+            ["git", "config", "--global", "user.name"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if res_name.returncode == 0 and res_name.stdout.strip():
+            name = res_name.stdout.strip()
+
+        res_email = subprocess.run(
+            ["git", "config", "--global", "user.email"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if res_email.returncode == 0 and res_email.stdout.strip():
+            email = res_email.stdout.strip()
+    except Exception as e:
+        logger.debug(f"Failed to fetch host git identity: {e}")
+
+    return f"{name} <{email}>"
