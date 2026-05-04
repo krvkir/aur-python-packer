@@ -7,10 +7,10 @@ class Auditor:
     """
     Audits locally managed packages against upstream versions on PyPI.
     """
-    def __init__(self, state):
+    def __init__(self, state, cache=None):
         self.state = state
-        self.generator = PyPIGenerator()
-        self.pypi_client = PyPIClient()
+        self.generator = PyPIGenerator(cache=cache)
+        self.pypi_client = PyPIClient(cache=cache)
 
     def audit(self):
         """

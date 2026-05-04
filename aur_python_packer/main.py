@@ -4,6 +4,7 @@ import shlex
 import subprocess
 
 from aur_python_packer.builder import Builder
+from aur_python_packer.cache import NetworkCache
 from aur_python_packer.generator import PyPIGenerator
 from aur_python_packer.graph_utils import print_dependency_graph
 from aur_python_packer.repo import RepoManager
@@ -60,8 +61,16 @@ class Manager:
         self.resolver = DependencyResolver(
             self.work_dir, search_paths=[self.packages_dir, self.aur_packages_dir]
         )
-        self.generator = PyPIGenerator(maintainer=self.maintainer)
-        self.aur_client = AURClient()
+        # Cache for external API responses (never wiped between runs)
+        self.cache = NetworkCache(self.work_dir)
+
+        self.resolver = DependencyResolver(
+            self.work_dir,
+            search_paths=[self.packages_dir, self.aur_packages_dir],
+            cache=self.cache,
+        )
+        self.generator = PyPIGenerator(maintainer=self.maintainer, cache=self.cache)
+        self.aur_client = AURClient(cache=self.cache)
         self.metadata_parser = MetadataParser()
 
     def build_all(self, target_pkgs, nocheck=False, inject_depends=None, show_repo_deps=False):

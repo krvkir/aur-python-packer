@@ -17,7 +17,7 @@ class DependencyResolver:
     Local, Repo, AUR, and PyPI tiers.
     """
 
-    def __init__(self, work_dir=None, search_paths=None):
+    def __init__(self, work_dir=None, search_paths=None, cache=None):
         self.graph = nx.DiGraph()
         self.work_dir = work_dir
         self.search_paths = search_paths or ["."]
@@ -34,8 +34,8 @@ class DependencyResolver:
         self.visited = set()
         self.mapping = self._load_mapping()
         self.metadata_parser = MetadataParser()
-        self.pypi_client = PyPIClient()
-        self.aur_client = AURClient()
+        self.pypi_client = PyPIClient(cache=cache)
+        self.aur_client = AURClient(cache=cache)
 
     def get_build_order(self):
         """

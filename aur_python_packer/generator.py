@@ -15,13 +15,13 @@ class PyPIGenerator:
     and Jinja2 templates.
     """
 
-    def __init__(self, maintainer="AUR Packer <aur-packer@localhost>"):
+    def __init__(self, maintainer="AUR Packer <aur-packer@localhost>", cache=None):
         self.env = Environment(
             loader=PackageLoader("aur_python_packer", "templates"),
             autoescape=select_autoescape(),
         )
         self.template = self.env.get_template("PKGBUILD.j2")
-        self.pypi_client = PyPIClient()
+        self.pypi_client = PyPIClient(cache=cache)
         self.metadata_parser = MetadataParser()
         self.maintainer = maintainer
 

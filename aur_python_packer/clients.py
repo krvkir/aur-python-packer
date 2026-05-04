@@ -5,25 +5,38 @@ from aur_python_packer.utils import run_command
 
 logger = logging.getLogger(__name__)
 
+
 class PyPIClient:
     """
     Client for interacting with the PyPI JSON API.
+
+    When a *cache* (a :class:`~aur_python_packer.cache.NetworkCache`
+    instance) is supplied, all metadata lookups go through the cache
+    automatically.
     """
-    def __init__(self, timeout=10):
+
+    def __init__(self, timeout=10, cache=None):
         self.timeout = timeout
+        self.cache = cache
+
+    def _fetch_json(self, url):
+        """Fetch JSON from *url*, using the cache if available."""
+        if self.cache is not None:
+            return self.cache.fetch_json(url, "pypi", timeout=self.timeout)
+        resp = requests.get(url, timeout=self.timeout)
+        resp.raise_for_status()
+        return resp.json()
 
     def get_metadata(self, pyname):
         """
         Fetch core metadata for a PyPI package.
-        
+
         Returns a dict with name, version, summary, license, etc.
         """
         url = f"https://pypi.org/pypi/{pyname}/json"
         try:
             logger.debug(f"Requesting PyPI metadata from {url}")
-            resp = requests.get(url, timeout=self.timeout)
-            resp.raise_for_status()
-            data = resp.json()
+            data = self._fetch_json(url)
             info = data["info"]
             return {
                 "name": info["name"],
@@ -45,9 +58,7 @@ class PyPIClient:
         url = f"https://pypi.org/pypi/{pyname}/{version}/json"
         try:
             logger.debug(f"Requesting PyPI release info from {url}")
-            resp = requests.get(url, timeout=self.timeout)
-            resp.raise_for_status()
-            data = resp.json()
+            data = self._fetch_json(url)
             # We only care about source distributions (sdist) for PKGBUILDs
             for release in data["urls"]:
                 if release["packagetype"] == "sdist":
@@ -66,17 +77,22 @@ class PyPIClient:
         url = f"https://pypi.org/pypi/{pyname}/json"
         try:
             logger.debug(f"Verifying PyPI existence for {pyname}")
-            resp = requests.get(url, timeout=self.timeout)
-            return resp.status_code == 200
+            data = self._fetch_json(url)
+            return data is not None
         except Exception:
             return False
 
+
 class AURClient:
-    def __init__(self, timeout=10):
+    def __init__(self, timeout=10, cache=None):
         """
         Client for interacting with the AUR (Arch User Repository) RPC API and Git.
+
+        When a *cache* (a :class:`~aur_python_packer.cache.NetworkCache`
+        instance) is supplied, RPC lookups go through the cache.
         """
         self.timeout = timeout
+        self.cache = cache
 
     def get_info(self, pkgname):
         """
@@ -85,10 +101,13 @@ class AURClient:
         url = f"https://aur.archlinux.org/rpc/v5/info?arg[]={pkgname}"
         try:
             logger.debug(f"Requesting AUR info from {url}")
-            response = requests.get(url, timeout=self.timeout)
-            response.raise_for_status()
-            data = response.json()
-            if data["resultcount"] > 0:
+            if self.cache is not None:
+                data = self.cache.fetch_json(url, "aur", timeout=self.timeout)
+            else:
+                response = requests.get(url, timeout=self.timeout)
+                response.raise_for_status()
+                data = response.json()
+            if data and data.get("resultcount", 0) > 0:
                 return data["results"][0]
         except Exception as e:
             logger.debug(f"Failed to fetch AUR info for {pkgname}: {e}")
